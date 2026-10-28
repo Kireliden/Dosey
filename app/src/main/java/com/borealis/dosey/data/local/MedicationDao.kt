@@ -13,11 +13,17 @@ interface MedicationDao {
     @Query("SELECT * FROM medications ORDER BY name COLLATE NOCASE ASC")
     fun observeAll(): Flow<List<MedicationEntity>>
 
+    @Query("SELECT * FROM medications WHERE id = :medicationId LIMIT 1")
+    suspend fun findById(medicationId: Long): MedicationEntity?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(medication: MedicationEntity): Long
 
     @Update
     suspend fun update(medication: MedicationEntity)
+
+    @Query("UPDATE medications SET stockQuantity = MAX(0, stockQuantity - :units) WHERE id = :medicationId AND stockQuantity >= 0")
+    suspend fun deductStock(medicationId: Long, units: Int)
 
     @Delete
     suspend fun delete(medication: MedicationEntity)
