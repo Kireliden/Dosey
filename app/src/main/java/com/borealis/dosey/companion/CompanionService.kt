@@ -34,6 +34,7 @@ class CompanionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            CompanionPairingManager.clearPending()
             networkServer?.stop()
             networkServer = null
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -76,6 +77,7 @@ class CompanionService : Service() {
     }
 
     override fun onDestroy() {
+        CompanionPairingManager.clearPending()
         networkServer?.stop()
         networkServer = null
         super.onDestroy()
