@@ -214,7 +214,10 @@ internal class CompanionNetworkServer(
                 val headersSafe = headersValid && !transferEncodingSeen &&
                     hostHeaderCount <= 1 &&
                     (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen) &&
-                    (!requestBodyDeclared || (isPairRequest && contentLength in 1..MAX_PAIR_REQUEST_BODY_BYTES))
+                    (!requestBodyDeclared && (
+                        (!isPairRequest && contentLength == 0) ||
+                            (isPairRequest && contentLength in 1..MAX_PAIR_REQUEST_BODY_BYTES)
+                        ))
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
                 val pairRequestBody = if (headersSafe && isPairRequest) {
