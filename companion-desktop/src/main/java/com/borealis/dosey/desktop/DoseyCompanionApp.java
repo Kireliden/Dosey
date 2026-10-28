@@ -140,7 +140,8 @@ public final class DoseyCompanionApp {
     private void discoverDosey() {
         setBusy(true, "Searching the local network for Dosey…");
         CompletableFuture.runAsync(() -> {
-            List<String> interfaceNotes = new ArrayList<>();
+            try {
+                List<String> interfaceNotes = new ArrayList<>();
             ServiceInfo service = null;
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces != null && interfaces.hasMoreElements() && service == null) {
