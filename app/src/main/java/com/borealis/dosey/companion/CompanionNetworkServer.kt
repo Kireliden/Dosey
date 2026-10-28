@@ -147,6 +147,7 @@ internal class CompanionNetworkServer(
     private fun handleClient(socket: Socket) {
         socket.use { raw ->
             try {
+                if (!isLocalNetworkAddress(raw.inetAddress)) return
                 val client = raw as javax.net.ssl.SSLSocket
                 client.soTimeout = 4000
                 client.startHandshake()
@@ -296,6 +297,7 @@ internal class CompanionNetworkServer(
                         .put("protocolVersion", 1)
                         .put("status", if (CompanionPairingManager.pendingRequest.value == null) "pairing_required" else "pairing_pending")
                         .put("medicationDataAvailable", false)
+                        .put("authenticatedSnapshotAvailable", true)
                         .put("certificateSha256", certificateFingerprint.value.orEmpty())
                         .put("serverTime", System.currentTimeMillis())
                         .toString()
@@ -357,6 +359,13 @@ internal class CompanionNetworkServer(
                 // Invalid or interrupted clients are intentionally ignored.
             }
         }
+    }
+
+    private fun isLocalNetworkAddress(address: java.net.InetAddress): Boolean {
+        if (address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress) return true
+        val bytes = address.address
+        // IPv6 unique-local addresses (fc00::/7) are private LAN addresses too.
+        return bytes.size == 16 && (bytes[0].toInt() and 0xFE) == 0xFC
     }
 
     private fun readAsciiLine(input: java.io.InputStream, maxLength: Int): String? {
