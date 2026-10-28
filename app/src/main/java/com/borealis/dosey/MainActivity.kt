@@ -288,14 +288,13 @@ private fun DoseyHome(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = if (selectedScreen == "today") today else stringResource(
-                                when (selectedScreen) {
-                                    "medications" -> R.string.nav_medications
-                                    "history" -> R.string.nav_history
-                                    "settings" -> R.string.nav_companion
-                                    else -> R.string.nav_companion
-                                }
-                            ),
+                            text = when (selectedScreen) {
+                                "today" -> today
+                                "settings" -> "Settings"
+                                "medications" -> stringResource(R.string.nav_medications)
+                                "history" -> stringResource(R.string.nav_history)
+                                else -> stringResource(R.string.nav_companion)
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
