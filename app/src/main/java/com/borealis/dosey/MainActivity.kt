@@ -319,10 +319,17 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                 showMedicationDialog = false
                 medicationBeingEdited = null
             },
-            onSave = { name, dose, notes ->
-                viewModel.saveMedication(medicationBeingEdited, name, dose, notes)
+            onSave = { name, dose, notes, stockQuantity, lowStockThreshold, unitsPerDose ->
+                viewModel.saveMedication(
+                    medicationBeingEdited, name, dose, notes,
+                    stockQuantity, lowStockThreshold, unitsPerDose
+                )
                 medicationBeingEdited?.let { existing ->
-                    val updated = existing.copy(name = name.trim(), doseDescription = dose.trim(), notes = notes.trim())
+                    val updated = existing.copy(
+                        name = name.trim(), doseDescription = dose.trim(), notes = notes.trim(),
+                        stockQuantity = stockQuantity, lowStockThreshold = lowStockThreshold,
+                        unitsPerDose = unitsPerDose
+                    )
                     schedules.filter { it.medicationId == existing.id }.forEach { schedule ->
                         DoseAlarmScheduler(context).schedule(updated, schedule)
                     }
@@ -487,6 +494,24 @@ private fun MedicationCard(
                     )
                 }
 
+                if (medication.stockQuantity >= 0) {
+                    Text(
+                        text = stringResource(R.string.stock_quantity, medication.stockQuantity),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (medication.stockQuantity <= medication.lowStockThreshold)
+                            MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (medication.stockQuantity <= medication.lowStockThreshold) {
+                        Text(
+                            text = stringResource(R.string.low_stock_warning),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
                 if (schedules.isNotEmpty()) {
                     Text(
                         text = schedules.sortedBy { it.minutesAfterMidnight }.joinToString(" · ") {
@@ -621,7 +646,10 @@ private fun DoseScheduleDialog(
 private fun MedicationDialog(
     medication: MedicationEntity?,
     onDismiss: () -> Unit,
-    onSave: (name: String, dose: String, notes: String) -> Unit
+    onSave: (
+        name: String, dose: String, notes: String,
+        stockQuantity: Int, lowStockThreshold: Int, unitsPerDose: Int
+    ) -> Unit
 ) {
     var name by remember(medication?.id) {
         mutableStateOf(medication?.name.orEmpty())
@@ -632,6 +660,16 @@ private fun MedicationDialog(
     var notes by remember(medication?.id) {
         mutableStateOf(medication?.notes.orEmpty())
     }
+    var stockText by remember(medication?.id) {
+        mutableStateOf(medication?.stockQuantity?.takeIf { it >= 0 }?.toString().orEmpty())
+    }
+    var lowStockText by remember(medication?.id) {
+        mutableStateOf((medication?.lowStockThreshold ?: 5).toString())
+    }
+    var unitsPerDoseText by remember(medication?.id) {
+        mutableStateOf((medication?.unitsPerDose ?: 1).toString())
+    }
+    var inventoryError by remember(medication?.id) { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -671,11 +709,60 @@ private fun MedicationDialog(
                     minLines = 2,
                     maxLines = 4
                 )
+
+                Text(
+                    text = stringResource(R.string.inventory_section),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(R.string.inventory_instructions),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = stockText,
+                    onValueChange = { stockText = it.filter(Char::isDigit); inventoryError = false },
+                    label = { Text(stringResource(R.string.stock_quantity_label)) },
+                    placeholder = { Text(stringResource(R.string.stock_untracked_hint)) },
+                    singleLine = true,
+                    isError = inventoryError
+                )
+                OutlinedTextField(
+                    value = lowStockText,
+                    onValueChange = { lowStockText = it.filter(Char::isDigit); inventoryError = false },
+                    label = { Text(stringResource(R.string.low_stock_threshold_label)) },
+                    singleLine = true,
+                    isError = inventoryError
+                )
+                OutlinedTextField(
+                    value = unitsPerDoseText,
+                    onValueChange = { unitsPerDoseText = it.filter(Char::isDigit); inventoryError = false },
+                    label = { Text(stringResource(R.string.units_per_dose_label)) },
+                    singleLine = true,
+                    isError = inventoryError
+                )
+                if (inventoryError) {
+                    Text(
+                        text = stringResource(R.string.invalid_inventory_values),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim(), dose.trim(), notes.trim()) },
+                onClick = {
+                    val stock = if (stockText.isBlank()) -1 else stockText.toIntOrNull()
+                    val threshold = lowStockText.toIntOrNull()
+                    val units = unitsPerDoseText.toIntOrNull()
+                    if (stock == null || stock < -1 || threshold == null || threshold < 0 || units == null || units < 1) {
+                        inventoryError = true
+                    } else {
+                        onSave(name.trim(), dose.trim(), notes.trim(), stock, threshold, units)
+                    }
+                },
                 enabled = name.isNotBlank()
             ) {
                 Text(
