@@ -50,6 +50,29 @@ class DoseAlarmScheduler(private val context: Context) {
         )
     }
 
+    /**
+     * Schedules a one-off reminder without replacing the regular daily alarm.
+     */
+    fun scheduleSnooze(
+        medicationId: Long,
+        medicationName: String,
+        minutes: Int,
+        snoozeMinutes: Int
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val snoozeIntent = reminderIntent(medicationId, medicationName, minutes).apply {
+            putExtra(DoseAlarmReceiver.EXTRA_IS_SNOOZED_REMINDER, true)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            DoseAlarmReceiver.notificationId(medicationId, minutes) xor Int.MIN_VALUE,
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val triggerAt = System.currentTimeMillis() + snoozeMinutes.coerceAtLeast(1) * 60_000L
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+    }
+
     fun cancel(medicationId: Long, minutes: Int) {
         val intent = Intent(context, DoseAlarmReceiver::class.java).apply {
             action = DoseAlarmReceiver.ACTION_REMIND
