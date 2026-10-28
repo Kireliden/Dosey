@@ -17,7 +17,7 @@ This document is the implementation contract for the Android host and future des
 - `POST /v1/pair/request` accepts a small JSON body containing `clientName`, creates a single short-lived (120-second) request, and returns a request ID plus a six-digit comparison code.
 - Android shows the requesting device and comparison code with explicit Approve/Reject actions. The PC can poll `GET /v1/pair/status?id=<requestId>` for pending/approved/rejected/expired state.
 - Pair requests are in-memory only and are cleared when Companion stops. A second simultaneous request is refused. Pair requests also require a non-empty client name of at most 80 characters, reject malformed or unexpected JSON fields, allow at most five accepted requests per minute, and enforce a minimum five-second interval between accepted requests.
-- Approval currently records consent only. It does not issue credentials, authenticate a client, or unlock medication data. An approval action on an expired request is recorded as expired rather than leaving a misleading missing result. The code must be compared with the PC display, but this alone is not a substitute for checking the TLS certificate fingerprint.
+- After Android approval, the PC confirms using `POST /v1/pair/confirm` with exactly `requestId` and `verificationCode`. Only a matching, still-valid approved request receives a one-time credential response. An approval action on an expired request is recorded as expired. The PC must pin the TLS certificate before starting this flow; the six-digit code alone is not sufficient.
 
 ## Pairing
 
@@ -37,10 +37,10 @@ Still required before a connection can access medical data:
 
 - GET /v1/status: protocol version, app version, snapshot revision, and server time. No medical details.
 - POST /v1/pair/request: starts a pairing request.
-- POST /v1/pair/confirm: confirms the short-lived code and returns the client credential.
-- GET /v1/snapshot: returns a consistent, versioned snapshot of medications, schedules, dose logs and one-off dose logs.
-- POST /v1/commands: submits one supported write command. Android validates and commits it to Room before returning success.
-- GET /v1/changes?after=<revision>: returns changes since a revision, or asks the client to download a new snapshot when the revision is too old.
+- POST /v1/pair/confirm: confirms the approved short-lived code and returns the client credential once.
+- GET /v1/snapshot: returns a consistent, versioned snapshot of medications, schedules, dose logs and one-off dose logs. Requires `Authorization: Bearer <credential>`.
+- POST /v1/commands: accepts authenticated `record_dose` and `record_one_off` commands. Each body includes a UUID `commandId`; duplicate command IDs replay the original response without repeating the mutation. Android commits the command receipt and Room mutation in the same transaction before returning success.
+- GET /v1/changes?after=<revision>: currently returns a full snapshot, with `resetRequired` indicating whether the requested revision differs from the current revision. Partial change-feed optimisation is deferred until the desktop client exists.
 
 All authenticated responses include a monotonically increasing snapshot revision. Writes must include an idempotency key so retrying after a dropped response cannot record the same dose twice.
 
@@ -61,9 +61,9 @@ The desktop client stores the last valid snapshot and the timestamp it was recei
 
 Android now has an isolated storage component for future per-PC credentials. It generates 256-bit random bearer tokens, persists only SHA-256 token verifiers, and encrypts the client registry with AES-256-GCM using a key held by Android Keystore. The API supports listing client metadata, constant-time verifier comparison, and revoking a client. Raw tokens are returned only once by the issuance method.
 
-This component is intentionally **not wired to pairing approval or HTTP routes**. The current desktop client does not exist yet, so certificate-fingerprint comparison and pinning UX cannot be verified end-to-end. No credentials are issued by the running app, no authentication route exists, and no medication data is exposed. Corrupt or undecryptable stored state fails closed rather than being silently replaced. Revocation takes effect for future authentication checks once the eventual authenticated routes use this store.
+This component is wired to approved pairing and bearer-token authentication. Corrupt or undecryptable stored state fails closed rather than being silently replaced. The store supports revocation, but the Android user-facing client-management UI remains pending. The desktop client must pin the certificate before pairing; that cannot be verified end-to-end until the PC client exists.
 
 
 ## Snapshot preparation foundation
 
-Android now has an internal snapshot exporter that reads medications, schedules, scheduled-dose history, one-off-dose history, and a durable revision within a single Room transaction. A Room migration (v5 to v6) creates the revision metadata row and SQLite triggers increment it for every insert, update, or delete on any snapshot table, including writes performed outside the main repository. The exported JSON includes `protocolVersion`, `generatedAt`, and `revision`. The exporter is not exposed over HTTP and does not bypass authentication. Certificate-pinned desktop pairing, authenticated client identity, and end-to-end tests are still required before exposing a route.
+Android now has an internal snapshot exporter that reads medications, schedules, scheduled-dose history, one-off-dose history, and a durable revision within a single Room transaction. A Room migration (v5 to v6) creates the revision metadata row and SQLite triggers increment it for every insert, update, or delete on any snapshot table, including writes performed outside the main repository. The exported JSON includes `protocolVersion`, `generatedAt`, and `revision`. The exporter is exposed through authenticated snapshot and changes routes. Authenticated writes support only scheduled dose status and one-off dose records. Certificate-pinned desktop pairing, revocation UI, and end-to-end tests still need to be verified before release.
