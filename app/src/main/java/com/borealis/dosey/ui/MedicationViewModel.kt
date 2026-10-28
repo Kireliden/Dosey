@@ -53,6 +53,13 @@ class MedicationViewModel(
         }
     }
 
+    fun refillMedication(medicationId: Long, units: Int) {
+        if (units <= 0) return
+        viewModelScope.launch {
+            repository.refillMedication(medicationId, units)
+        }
+    }
+
     fun addSchedule(medicationId: Long, minutesAfterMidnight: Int) {
         if (minutesAfterMidnight !in 0..1439) return
         viewModelScope.launch {
