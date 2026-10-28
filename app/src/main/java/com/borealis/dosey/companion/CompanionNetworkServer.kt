@@ -153,6 +153,7 @@ internal class CompanionNetworkServer(
                 var hostHeaderSeen = false
                 var hostHeaderCount = 0
                 var contentLengthSeen = false
+                var contentLength = 0
                 var transferEncodingSeen = false
                 var requestBodyDeclared = false
                 while (headersValid) {
@@ -188,8 +189,12 @@ internal class CompanionNetworkServer(
                         "content-length" -> {
                             if (contentLengthSeen) requestBodyDeclared = true
                             contentLengthSeen = true
-                            val length = value.toLongOrNull()
-                            if (length == null || length != 0L) requestBodyDeclared = true
+                            val length = value.toIntOrNull()
+                            if (length == null || length < 0 || length > MAX_PAIR_REQUEST_BODY_BYTES) {
+                                requestBodyDeclared = true
+                            } else {
+                                contentLength = length
+                            }
                         }
                         "transfer-encoding" -> {
                             transferEncodingSeen = true
@@ -204,25 +209,52 @@ internal class CompanionNetworkServer(
                     parts[1].startsWith("/") &&
                     parts[1].none { it <= ' ' || it.code == 127 } &&
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
-                val headersSafe = headersValid && !requestBodyDeclared && !transferEncodingSeen &&
+                val isPairRequest = requestLineValid &&
+                    parts[0] == "POST" && parts[1] == "/v1/pair/request" && parts[2] == "HTTP/1.1"
+                val headersSafe = headersValid && !transferEncodingSeen &&
                     hostHeaderCount <= 1 &&
-                    (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen)
+                    (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen) &&
+                    (!requestBodyDeclared || (isPairRequest && contentLength in 1..MAX_PAIR_REQUEST_BODY_BYTES))
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
+                val pairRequestBody = if (headersSafe && isPairRequest) {
+                    val bytes = ByteArray(contentLength)
+                    var offset = 0
+                    while (offset < bytes.size) {
+                        val count = input.read(bytes, offset, bytes.size - offset)
+                        if (count < 0) throw java.io.IOException("Incomplete pairing request body")
+                        offset += count
+                    }
+                    JSONObject(bytes.toString(Charsets.UTF_8))
+                } else null
+                val pairingRequest = if (pairRequestBody != null) {
+                    val clientName = pairRequestBody.optString("clientName", "Unknown PC").trim()
+                    if (clientName.length > 80) null
+                    else CompanionPairingManager.createRequest(clientName)
+                } else null
+                val pairRequestValid = isPairRequest && pairRequestBody != null && pairingRequest != null
                 val body = when {
                     !headersSafe || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
                         .put("service", "Dosey Companion")
                         .put("protocolVersion", 1)
-                        .put("status", "pairing_required")
+                        .put("status", if (CompanionPairingManager.pendingRequest.value == null) "pairing_required" else "pairing_pending")
                         .put("medicationDataAvailable", false)
                         .put("serverTime", System.currentTimeMillis())
                         .toString()
+                    pairRequestValid -> JSONObject()
+                        .put("requestId", pairingRequest!!.id)
+                        .put("verificationCode", pairingRequest.verificationCode)
+                        .put("expiresAt", pairingRequest.expiresAt)
+                        .put("status", "awaiting_android_approval")
+                        .toString()
+                    isPairRequest -> JSONObject().put("error", if (pairRequestBody == null) "invalid_pairing_request" else "pairing_request_already_pending").toString()
                     else -> JSONObject().put("error", "not_found").toString()
                 }
                 val status = when {
                     !headersSafe || !requestLineValid -> "400 Bad Request"
-                    isStatusRequest -> "200 OK"
+                    isStatusRequest || pairRequestValid -> "200 OK"
+                    isPairRequest -> "409 Conflict"
                     else -> "404 Not Found"
                 }
                 val payload = body.toByteArray(Charsets.UTF_8)
@@ -301,5 +333,6 @@ internal class CompanionNetworkServer(
         private const val MAX_HEADER_LINE_BYTES = 2048
         private const val MAX_HEADER_BYTES = 8192
         private const val MAX_HEADER_COUNT = 64
+        private const val MAX_PAIR_REQUEST_BODY_BYTES = 1024
     }
 }
