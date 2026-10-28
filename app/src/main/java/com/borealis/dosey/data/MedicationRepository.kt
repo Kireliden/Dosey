@@ -16,12 +16,22 @@ class MedicationRepository(
     fun observeMedications(): Flow<List<MedicationEntity>> =
         medicationDao.observeAll()
 
-    suspend fun addMedication(name: String, doseDescription: String, notes: String) {
+    suspend fun addMedication(
+        name: String,
+        doseDescription: String,
+        notes: String,
+        stockQuantity: Int,
+        lowStockThreshold: Int,
+        unitsPerDose: Int
+    ) {
         medicationDao.insert(
             MedicationEntity(
                 name = name.trim(),
                 doseDescription = doseDescription.trim(),
-                notes = notes.trim()
+                notes = notes.trim(),
+                stockQuantity = stockQuantity,
+                lowStockThreshold = lowStockThreshold,
+                unitsPerDose = unitsPerDose
             )
         )
     }
@@ -30,13 +40,19 @@ class MedicationRepository(
         medication: MedicationEntity,
         name: String,
         doseDescription: String,
-        notes: String
+        notes: String,
+        stockQuantity: Int,
+        lowStockThreshold: Int,
+        unitsPerDose: Int
     ) {
         medicationDao.update(
             medication.copy(
                 name = name.trim(),
                 doseDescription = doseDescription.trim(),
-                notes = notes.trim()
+                notes = notes.trim(),
+                stockQuantity = stockQuantity,
+                lowStockThreshold = lowStockThreshold,
+                unitsPerDose = unitsPerDose
             )
         )
     }
