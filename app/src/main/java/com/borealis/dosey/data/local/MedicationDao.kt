@@ -13,6 +13,9 @@ interface MedicationDao {
     @Query("SELECT * FROM medications ORDER BY name COLLATE NOCASE ASC")
     fun observeAll(): Flow<List<MedicationEntity>>
 
+    @Query("SELECT * FROM medications ORDER BY name COLLATE NOCASE ASC")
+    suspend fun getAllForSnapshot(): List<MedicationEntity>
+
     @Query("SELECT * FROM medications WHERE id = :medicationId LIMIT 1")
     suspend fun findById(medicationId: Long): MedicationEntity?
 
