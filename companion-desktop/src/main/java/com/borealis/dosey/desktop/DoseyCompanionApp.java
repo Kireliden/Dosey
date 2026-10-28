@@ -8,15 +8,12 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.URL;
+import javax.net.ssl.HttpsURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.time.Duration;
 import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,7 +32,7 @@ public final class DoseyCompanionApp {
     private final JButton snapshotButton = new JButton("Refresh snapshot");
     private final JLabel statusLabel = new JLabel("Not connected");
     private final JTextArea outputArea = new JTextArea();
-    private volatile HttpClient client;
+    private volatile PinnedHttpClient client;
     private volatile String baseUrl;
     private volatile String credential;
     private volatile String requestId;
@@ -141,13 +138,9 @@ public final class DoseyCompanionApp {
                 X509TrustManager trustManager = new PinningTrustManager(fingerprint);
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 sslContext.init(null, new TrustManager[]{trustManager}, null);
-                HttpClient newClient = HttpClient.newBuilder()
-                    .sslContext(sslContext)
-                    .connectTimeout(Duration.ofSeconds(5))
-                    .followRedirects(HttpClient.Redirect.NEVER)
-                    .build();
+                PinnedHttpClient newClient = new PinnedHttpClient(sslContext);
                 String url = "https://" + (host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host) + ":" + port;
-                HttpResponse<String> response = send(newClient, url + "/v1/status", "GET", null, null);
+                PinnedHttpClient.Response response = newClient.send(url + "/v1/status", "GET", null, null);
                 if (response.statusCode() != 200) throw new IOException("Android returned HTTP " + response.statusCode());
                 JSONObject status = new JSONObject(response.body());
                 if (status.optInt("protocolVersion", -1) != 1) throw new IOException("Unsupported Companion protocol version");
@@ -175,7 +168,7 @@ public final class DoseyCompanionApp {
     }
 
     private void requestPairing() {
-        HttpClient current = client;
+        PinnedHttpClient current = client;
         String url = baseUrl;
         if (current == null || url == null) return;
         String name = clientNameField.getText().trim();
@@ -187,11 +180,12 @@ public final class DoseyCompanionApp {
         CompletableFuture.runAsync(() -> {
             try {
                 JSONObject request = new JSONObject().put("clientName", name);
-                HttpResponse<String> response = send(current, url + "/v1/pair/request", "POST", request.toString(), null);
+                PinnedHttpClient.Response response = current.send(url + "/v1/pair/request", "POST", request.toString(), null);
                 JSONObject body = new JSONObject(response.body());
                 if (response.statusCode() != 200) throw new IOException("Pair request failed: " + body.optString("error", response.statusCode() + ""));
                 requestId = body.getString("requestId");
                 String code = body.getString("verificationCode");
+                pairingCodeFromLastPrompt = code;
                 SwingUtilities.invokeLater(() -> {
                     setBusy(false, null);
                     append("Pairing code: " + code + "\nApprove this exact request in Dosey on Android.\n");
@@ -217,13 +211,13 @@ public final class DoseyCompanionApp {
             try {
                 long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
                 while (System.nanoTime() < deadline) {
-                    HttpResponse<String> response = send(current, url + "/v1/pair/status?id=" + id, "GET", null, null);
+                    PinnedHttpClient.Response response = current.send(url + "/v1/pair/status?id=" + id, "GET", null, null);
                     JSONObject body = new JSONObject(response.body());
                     String state = body.optString("status", "not_found");
                     if ("approved".equals(state)) {
                         JSONObject confirm = new JSONObject().put("requestId", id)
                             .put("verificationCode", pairingCodeFromLastPrompt);
-                        HttpResponse<String> confirmed = send(current, url + "/v1/pair/confirm", "POST", confirm.toString(), null);
+                        PinnedHttpClient.Response confirmed = current.send(url + "/v1/pair/confirm", "POST", confirm.toString(), null);
                         JSONObject result = new JSONObject(confirmed.body());
                         if (confirmed.statusCode() != 200) throw new IOException("Pair confirmation failed: " + result.optString("error"));
                         credential = result.getString("credential");
@@ -256,7 +250,7 @@ public final class DoseyCompanionApp {
         setBusy(true, "Refreshing medication snapshot…");
         CompletableFuture.runAsync(() -> {
             try {
-                HttpResponse<String> response = send(current, url + "/v1/snapshot", "GET", null, token);
+                PinnedHttpClient.Response response = current.send(url + "/v1/snapshot", "GET", null, token);
                 JSONObject snapshot = new JSONObject(response.body());
                 if (response.statusCode() != 200) throw new IOException("Snapshot request failed: " + snapshot.optString("error"));
                 if (snapshot.optInt("protocolVersion", -1) != 1 || !snapshot.has("revision")) {
@@ -294,18 +288,45 @@ public final class DoseyCompanionApp {
         return text.toString();
     }
 
-    private static HttpResponse<String> send(HttpClient client, String url, String method, String body, String token)
-        throws IOException, InterruptedException {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-            .timeout(Duration.ofSeconds(10))
-            .header("Accept", "application/json")
-            .header("Cache-Control", "no-store");
-        if (token != null) builder.header("Authorization", "Bearer " + token);
-        if ("POST".equals(method)) {
-            builder.header("Content-Type", "application/json; charset=utf-8")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-        } else builder.GET();
-        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    /**
+     * Android currently uses a self-signed CN-only certificate without DNS/IP SANs.
+     * The exact certificate SHA-256 pin is checked on every TLS handshake instead.
+     */
+    private static final class PinnedHttpClient {
+        private final SSLContext sslContext;
+        private PinnedHttpClient(SSLContext sslContext) { this.sslContext = sslContext; }
+
+        private record Response(int statusCode, String body) {}
+
+        private Response send(String url, String method, String body, String token) throws IOException {
+            HttpsURLConnection connection = (HttpsURLConnection) new URL(url).openConnection();
+            connection.setSSLSocketFactory(sslContext.getSocketFactory());
+            connection.setHostnameVerifier((hostname, session) -> true);
+            connection.setInstanceFollowRedirects(false);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+            connection.setRequestMethod(method);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("Cache-Control", "no-store");
+            if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
+            if ("POST".equals(method)) {
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+                connection.setFixedLengthStreamingMode(bytes.length);
+                try (var output = connection.getOutputStream()) { output.write(bytes); }
+            }
+            int status = connection.getResponseCode();
+            var stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String responseBody = "";
+            if (stream != null) {
+                try (var input = stream) {
+                    responseBody = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+            connection.disconnect();
+            return new Response(status, responseBody);
+        }
     }
 
     private static String normaliseFingerprint(String value) {
