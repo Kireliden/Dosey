@@ -91,7 +91,18 @@ internal object CompanionPairingManager {
         val request = mutablePendingRequest.value
         if (request != null && request.expiresAt <= System.currentTimeMillis()) {
             mutablePendingRequest.value = null
+            completedRequestId = request.id
+            completedStatus = "expired"
+            completedAt = System.currentTimeMillis()
         }
+    }
+
+    @Synchronized
+    fun clearPending() {
+        mutablePendingRequest.value = null
+        completedRequestId = null
+        completedStatus = null
+        completedAt = 0L
     }
 
     const val REQUEST_LIFETIME_MS = 120_000L
