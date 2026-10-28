@@ -294,10 +294,13 @@ internal class CompanionNetworkServer(
                 } else null
                 val snapshotResponse = if (bearerToken != null && (isSnapshotRequest || isChangesRequest)) {
                     runCatching {
-                        runBlocking { CompanionSnapshotExporter.create(DoseyDatabase.getInstance(context)) }
-                            .toJson()
+                        val snapshot = runBlocking {
+                            CompanionSnapshotExporter.create(DoseyDatabase.getInstance(context))
+                        }
+                        snapshot.toJson()
                             .put("fullSnapshot", true)
-                            .put("resetRequired", isChangesRequest && (afterRevision == null || afterRevision != revision))
+                            .put("resetRequired", isChangesRequest &&
+                                (afterRevision == null || afterRevision != snapshot.revision))
                     }.getOrNull()
                 } else null
                 val body = when {
