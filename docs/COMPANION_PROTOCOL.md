@@ -16,8 +16,8 @@ This document is the implementation contract for the Android host and future des
 - The Android host generates a persistent self-signed RSA certificate in Android Keystore and advertises `_dosey._tcp.` only while Companion is enabled. Android displays the certificate SHA-256 fingerprint while Companion is running.
 - `POST /v1/pair/request` accepts a small JSON body containing `clientName`, creates a single short-lived (120-second) request, and returns a request ID plus a six-digit comparison code.
 - Android shows the requesting device and comparison code with explicit Approve/Reject actions. The PC can poll `GET /v1/pair/status?id=<requestId>` for pending/approved/rejected/expired state.
-- Pair requests are in-memory only and are cleared when Companion stops. A second simultaneous request is refused.
-- Approval currently records consent only. It does not issue credentials, authenticate a client, or unlock medication data. The code must be compared with the PC display, but this alone is not a substitute for checking the TLS certificate fingerprint.
+- Pair requests are in-memory only and are cleared when Companion stops. A second simultaneous request is refused. Pair requests also require a non-empty client name of at most 80 characters, reject malformed or unexpected JSON fields, allow at most five accepted requests per minute, and enforce a minimum five-second interval between accepted requests.
+- Approval currently records consent only. It does not issue credentials, authenticate a client, or unlock medication data. An approval action on an expired request is recorded as expired rather than leaving a misleading missing result. The code must be compared with the PC display, but this alone is not a substitute for checking the TLS certificate fingerprint.
 
 ## Pairing
 
