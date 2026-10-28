@@ -21,6 +21,13 @@
     <string name="add_one_off_dose">Add a one-off dose</string>
     <string name="one_off_dose_title">Record a one-off dose</string>
     <string name="one_off_no_medications">Add a medication first, then you can record a dose.</string>
+    <string name="one_off_recent_suggestions">Recently recorded one-off medicines</string>
+    <string name="one_off_or_new">Or enter a different medicine</string>
+    <string name="one_off_medication_name">Medicine name</string>
+    <string name="one_off_dose_label">Dose taken (optional)</string>
+    <string name="one_off_name_required">Enter the medicine name.</string>
+    <string name="record_dose">Record dose</string>
+    <string name="one_off_history_entry">%1$s · %2$s · %3$s (one-off)</string>
     <string name="upcoming_doses_empty">Once you add your treatments, you can see your upcoming doses here.</string>
     <string name="no_schedules_yet">No schedules configured yet. Add a time to see it here.</string>
     <string name="manage_schedule">Schedule</string>
