@@ -69,6 +69,15 @@ class DoseAlarmReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) {
             // Android 13+ notification permission may not have been granted.
         }
+
+        // Alarms are one-shot so they can fire much closer to the requested time.
+        // Schedule tomorrow's reminder after handling today's one.
+        DoseAlarmScheduler(context).scheduleNextOccurrence(
+            medicationId = medicationId,
+            medicationName = medicationName,
+            minutes = minutes,
+            includeToday = false
+        )
     }
 
     private fun actionIntent(context: Context, action: String, id: Long, name: String, minutes: Int): PendingIntent {
