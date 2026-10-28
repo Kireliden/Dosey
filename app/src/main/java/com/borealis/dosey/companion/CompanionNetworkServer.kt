@@ -3,7 +3,8 @@ package com.borealis.dosey.companion
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import android.security.KeyPairGeneratorSpec
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -151,13 +152,28 @@ internal class CompanionNetworkServer(
     private fun createServerSslContext(): SSLContext {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         if (!keyStore.containsAlias(KEY_ALIAS)) {
-            val generator = KeyPairGenerator.getInstance("RSA", ANDROID_KEYSTORE)
-            val spec = KeyPairGeneratorSpec.Builder(context)
-                .setAlias(KEY_ALIAS)
-                .setSubject(X500Principal("CN=Dosey Companion"))
-                .setSerialNumber(BigInteger.valueOf(SecureRandom().nextLong().ushr(1).coerceAtLeast(1L)))
-                .setStartDate(Date(System.currentTimeMillis() - 60_000L))
-                .setEndDate(Date(System.currentTimeMillis() + CERT_VALIDITY_MS))
+            val generator = KeyPairGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_RSA,
+                ANDROID_KEYSTORE
+            )
+            val now = System.currentTimeMillis()
+            val spec = KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_SIGN
+            )
+                .setKeySize(2048)
+                .setDigests(
+                    KeyProperties.DIGEST_SHA256,
+                    KeyProperties.DIGEST_SHA384,
+                    KeyProperties.DIGEST_SHA512
+                )
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setCertificateSubject(X500Principal("CN=Dosey Companion"))
+                .setCertificateSerialNumber(
+                    BigInteger.valueOf(SecureRandom().nextLong().ushr(1).coerceAtLeast(1L))
+                )
+                .setCertificateNotBefore(Date(now - 60_000L))
+                .setCertificateNotAfter(Date(now + CERT_VALIDITY_MS))
                 .build()
             generator.initialize(spec)
             generator.generateKeyPair()
