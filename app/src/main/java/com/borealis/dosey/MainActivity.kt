@@ -320,6 +320,12 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
             },
             onSave = { name, dose, notes ->
                 viewModel.saveMedication(medicationBeingEdited, name, dose, notes)
+                medicationBeingEdited?.let { existing ->
+                    val updated = existing.copy(name = name.trim(), doseDescription = dose.trim(), notes = notes.trim())
+                    schedules.filter { it.medicationId == existing.id }.forEach { schedule ->
+                        DoseAlarmScheduler(context).schedule(updated, schedule)
+                    }
+                }
                 showMedicationDialog = false
                 medicationBeingEdited = null
             }
@@ -358,6 +364,9 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
             confirmButton = {
                 TextButton(
                     onClick = {
+                        schedules.filter { it.medicationId == medication.id }.forEach { schedule ->
+                            DoseAlarmScheduler(context).cancel(medication.id, schedule.minutesAfterMidnight)
+                        }
                         viewModel.deleteMedication(medication)
                         medicationPendingDeletion = null
                     }
