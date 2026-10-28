@@ -24,6 +24,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
 import javax.security.auth.x500.X500Principal
 import kotlinx.coroutines.runBlocking
+import androidx.room.withTransaction
 import com.borealis.dosey.data.local.DoseyDatabase
 
 /**
@@ -296,7 +297,7 @@ internal class CompanionNetworkServer(
                         runBlocking { CompanionSnapshotExporter.create(DoseyDatabase.getInstance(context)) }
                             .toJson()
                             .put("fullSnapshot", true)
-                            .put("resetRequired", isChangesRequest && (afterRevision == null || afterRevision < 0L))
+                            .put("resetRequired", isChangesRequest && (afterRevision == null || afterRevision != revision))
                     }.getOrNull()
                 } else null
                 val body = when {
@@ -313,7 +314,7 @@ internal class CompanionNetworkServer(
                     pairStatusRequest -> JSONObject()
                         .put("requestId", pairStatusId ?: "")
                         .put("status", pairStatusId?.let(CompanionPairingManager::status) ?: "not_found")
-                        .put("credentialsIssued", false)
+                        .put("credentialsIssued", pairStatusId?.let(CompanionPairingManager::status) == "completed")
                         .toString()
                     isPairConfirm && issuedCredential != null -> JSONObject()
                         .put("clientId", issuedCredential.client.id)
@@ -378,7 +379,7 @@ internal class CompanionNetworkServer(
         val commandId = body.optString("commandId", "")
         require(commandId.matches(Regex("[a-fA-F0-9-]{36}"))) { "Invalid command id" }
         val database = DoseyDatabase.getInstance(context)
-        return androidx.room.withTransaction(database) {
+        return database.withTransaction {
             val previous = database.companionCommandReceiptDao().find(commandId)
             if (previous != null) {
                 return@withTransaction JSONObject(previous.responseJson).put("idempotentReplay", true)
