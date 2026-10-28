@@ -41,3 +41,10 @@
 6. Disconnect/read-only UI and recovery tests.
 
 The desktop client is intentionally out of scope for the Android-only foundation. Do not merge this work into the default branch until the user has built and validated it locally.
+
+### Current implementation status
+
+- Added an explicit PC Companion navigation screen and enable/disable control.
+- Added a user-started foreground service with a persistent notification; it does not auto-start.
+- The service intentionally does not yet open a socket or advertise an NSD endpoint. The screen states this clearly. This is a lifecycle/UI foundation, not a working PC connection.
+- Next Android milestone: implement TLS certificate provisioning and the authenticated local listener, then advertise the real listener through NSD. Do not advertise a port before TLS and pairing are implemented.
