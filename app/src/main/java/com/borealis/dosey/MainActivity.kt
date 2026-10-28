@@ -296,17 +296,8 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                 if (companionEnabled && companionFingerprint != null) {
                                     androidx.compose.material3.HorizontalDivider()
                                     Text(
-                                        text = stringResource(R.string.companion_certificate_fingerprint_title),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = companionFingerprint.orEmpty(),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.companion_certificate_fingerprint_help),
-                                        style = MaterialTheme.typography.bodySmall,
+                                        text = "Secure QR pairing verifies this phone's certificate automatically. You do not need to copy the fingerprint.",
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
