@@ -1,5 +1,7 @@
 package com.borealis.dosey.data
 
+import com.borealis.dosey.data.local.DoseLogDao
+import com.borealis.dosey.data.local.DoseLogEntity
 import com.borealis.dosey.data.local.DoseScheduleDao
 import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.MedicationDao
@@ -8,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 
 class MedicationRepository(
     private val medicationDao: MedicationDao,
-    private val doseScheduleDao: DoseScheduleDao
+    private val doseScheduleDao: DoseScheduleDao,
+    private val doseLogDao: DoseLogDao
 ) {
     fun observeMedications(): Flow<List<MedicationEntity>> =
         medicationDao.observeAll()
@@ -37,6 +40,8 @@ class MedicationRepository(
             )
         )
     }
+
+    fun observeDoseLogs(): Flow<List<DoseLogEntity>> = doseLogDao.observeAll()
 
     fun observeSchedules(): Flow<List<DoseScheduleEntity>> =
         doseScheduleDao.observeAll()
