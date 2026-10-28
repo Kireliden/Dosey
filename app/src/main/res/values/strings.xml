@@ -89,11 +89,13 @@
     <string name="companion_enable">Enable Companion</string>
     <string name="companion_disable">Disable Companion</string>
     <string name="companion_enabled_title">Companion is enabled</string>
-    <string name="companion_enabled_detail">The foreground service is running. The secure network listener and device pairing are not available yet, so no PC can connect in this build.</string>
+    <string name="companion_enabled_detail">The encrypted local status endpoint is active and discoverable. Pairing is not available yet, and medication data is not exposed.</string>
     <string name="companion_disabled_title">Companion is disabled</string>
     <string name="companion_disabled_detail">No companion service is running.</string>
     <string name="companion_notification_channel">Dosey Companion</string>
     <string name="companion_notification_description">Shows when you have manually enabled Dosey Companion.</string>
     <string name="companion_notification_title">Dosey Companion enabled</string>
-    <string name="companion_notification_message">Secure local connection is not available yet.</string>
+    <string name="companion_notification_message">Encrypted local status endpoint starting.</string>
+    <string name="companion_listener_running">Encrypted status endpoint active · pairing required</string>
+    <string name="companion_listener_error">Companion could not start: %1$s</string>
 </resources>
