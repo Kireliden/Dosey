@@ -198,7 +198,7 @@ internal class CompanionNetworkServer(
                             if (contentLengthSeen) requestBodyDeclared = true
                             contentLengthSeen = true
                             val length = value.toIntOrNull()
-                            if (length == null || length < 0 || length > MAX_PAIR_REQUEST_BODY_BYTES) {
+                            if (length == null || length < 0 || length > MAX_REQUEST_BODY_BYTES) {
                                 requestBodyDeclared = true
                             } else {
                                 contentLength = length
@@ -282,6 +282,15 @@ internal class CompanionNetworkServer(
                 val isChangesRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1].startsWith("/v1/changes?after=") && parts[2] == "HTTP/1.1"
                 val afterRevision = if (isChangesRequest) parts[1].substringAfter("after=").toLongOrNull() else null
+                val commandResponse = if (isCommandRequest && bearerToken != null && requestBody != null) {
+                    try {
+                        runBlocking { executeCommand(context, requestBody) }
+                    } catch (_: IllegalArgumentException) {
+                        JSONObject().put("error", "invalid_command")
+                    } catch (_: Exception) {
+                        JSONObject().put("error", "command_failed")
+                    }
+                } else null
                 val snapshotResponse = if (bearerToken != null && (isSnapshotRequest || isChangesRequest)) {
                     runCatching {
                         runBlocking { CompanionSnapshotExporter.create(DoseyDatabase.getInstance(context)) }
@@ -320,7 +329,8 @@ internal class CompanionNetworkServer(
                     (isSnapshotRequest || isChangesRequest) && snapshotResponse != null -> snapshotResponse.toString()
                     (isSnapshotRequest || isChangesRequest) -> JSONObject().put("error", "snapshot_unavailable").toString()
                     isCommandRequest && bearerToken == null -> JSONObject().put("error", "unauthorized").toString()
-                    isCommandRequest -> JSONObject().put("error", "unsupported_command").toString()
+                    isCommandRequest && commandResponse != null -> commandResponse.toString()
+                    isCommandRequest -> JSONObject().put("error", "invalid_command").toString()
                     pairRequestValid -> JSONObject()
                         .put("requestId", pairingRequest!!.id)
                         .put("verificationCode", pairingRequest.verificationCode)
@@ -340,7 +350,8 @@ internal class CompanionNetworkServer(
                     !headersSafe || !requestLineValid -> "400 Bad Request"
                     isStatusRequest || pairStatusRequest || pairRequestValid ||
                         (isPairConfirm && issuedCredential != null) ||
-                        ((isSnapshotRequest || isChangesRequest) && snapshotResponse != null) -> "200 OK"
+                        ((isSnapshotRequest || isChangesRequest) && snapshotResponse != null) ||
+                        (isCommandRequest && commandResponse?.optBoolean("accepted", false) == true) -> "200 OK"
                     (isSnapshotRequest || isChangesRequest || isCommandRequest) && bearerToken == null -> "401 Unauthorized"
                     isPairConfirm && !confirmInputValid -> "400 Bad Request"
                     isPairConfirm -> "409 Conflict"
@@ -358,6 +369,85 @@ internal class CompanionNetworkServer(
             } catch (_: Exception) {
                 // Invalid or interrupted clients are intentionally ignored.
             }
+        }
+    }
+
+
+    private suspend fun executeCommand(context: Context, body: JSONObject): JSONObject {
+        val allowedBaseKeys = setOf("commandId", "type")
+        val commandId = body.optString("commandId", "")
+        require(commandId.matches(Regex("[a-fA-F0-9-]{36}"))) { "Invalid command id" }
+        val database = DoseyDatabase.getInstance(context)
+        return androidx.room.withTransaction(database) {
+            val previous = database.companionCommandReceiptDao().find(commandId)
+            if (previous != null) {
+                return@withTransaction JSONObject(previous.responseJson).put("idempotentReplay", true)
+            }
+            val type = body.optString("type", "")
+            val response = when (type) {
+                "record_dose" -> {
+                    require(body.keySet() == allowedBaseKeys + setOf(
+                        "medicationId", "scheduledDate", "minutesAfterMidnight", "status"
+                    )) { "Unexpected command fields" }
+                    val medicationId = body.optLong("medicationId", -1L)
+                    val date = body.optString("scheduledDate", "")
+                    val minutes = body.optInt("minutesAfterMidnight", -1)
+                    val status = body.optString("status", "")
+                    require(medicationId > 0 && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) &&
+                        minutes in 0..1439 && status in setOf("TAKEN", "MISSED")) { "Invalid dose command" }
+                    val medication = database.medicationDao().findById(medicationId)
+                        ?: throw IllegalArgumentException("Medication not found")
+                    val previousLog = database.doseLogDao().find(medicationId, date, minutes)
+                    database.doseLogDao().upsert(
+                        com.borealis.dosey.data.local.DoseLogEntity(
+                            medicationId = medication.id,
+                            medicationName = medication.name,
+                            scheduledDate = date,
+                            minutesAfterMidnight = minutes,
+                            status = status
+                        )
+                    )
+                    if (status == "TAKEN" && previousLog?.status != "TAKEN" && medication.stockQuantity >= 0) {
+                        database.medicationDao().deductStock(medication.id, medication.unitsPerDose)
+                    }
+                    JSONObject().put("accepted", true).put("commandId", commandId)
+                        .put("type", type).put("createdOrUpdated", true)
+                }
+                "record_one_off" -> {
+                    require(body.keySet() == allowedBaseKeys + setOf(
+                        "medicationName", "doseDescription", "scheduledDate", "minutesAfterMidnight"
+                    )) { "Unexpected command fields" }
+                    val name = body.optString("medicationName", "").trim()
+                    val dose = body.optString("doseDescription", "").trim()
+                    val date = body.optString("scheduledDate", "")
+                    val minutes = body.optInt("minutesAfterMidnight", -1)
+                    require(name.isNotEmpty() && name.length <= 120 && dose.length <= 200 &&
+                        date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && minutes in 0..1439) {
+                        "Invalid one-off dose command"
+                    }
+                    database.oneOffDoseDao().insert(
+                        com.borealis.dosey.data.local.OneOffDoseEntity(
+                            medicationName = name,
+                            doseDescription = dose,
+                            scheduledDate = date,
+                            minutesAfterMidnight = minutes
+                        )
+                    )
+                    JSONObject().put("accepted", true).put("commandId", commandId)
+                        .put("type", type).put("createdOrUpdated", true)
+                }
+                else -> throw IllegalArgumentException("Unsupported command type")
+            }
+            val revision = database.companionSyncMetadataDao().getRevision()
+                ?: throw IllegalStateException("Missing snapshot revision")
+            response.put("revision", revision)
+            database.companionCommandReceiptDao().insert(
+                com.borealis.dosey.data.local.CompanionCommandReceiptEntity(
+                    commandId = commandId,
+                    responseJson = response.toString()
+                )
+            )
+            response
         }
     }
 
