@@ -554,6 +554,7 @@ internal class CompanionNetworkServer(
     }
 
     companion object {
+        private const val TAG = "DoseyCompanionServer"
         private val mutableCertificateFingerprint = MutableStateFlow<String?>(null)
         val certificateFingerprint: StateFlow<String?> = mutableCertificateFingerprint.asStateFlow()
 
