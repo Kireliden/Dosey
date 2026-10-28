@@ -64,6 +64,7 @@ import androidx.core.content.ContextCompat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val medicationViewModel: MedicationViewModel by viewModels {
@@ -95,223 +96,284 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
     val doseLogs by viewModel.doseLogs.collectAsStateWithLifecycle()
     var showMedicationDialog by remember { mutableStateOf(false) }
+    var showOneOffDialog by remember { mutableStateOf(false) }
     var medicationBeingEdited by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationPendingDeletion by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationForSchedule by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
-
+    var selectedScreen by remember { mutableStateOf("today") }
+    val drawerState = androidx.compose.material3.rememberDrawerState(
+        initialValue = androidx.compose.material3.DrawerValue.Closed
+    )
+    val scope = rememberCoroutineScope()
+    val todayDate = LocalDate.now().toString()
     val today = LocalDate.now().format(
-        DateTimeFormatter.ofPattern(
-            stringResource(R.string.date_pattern),
-            Locale.getDefault()
-        )
+        DateTimeFormatter.ofPattern(stringResource(R.string.date_pattern), Locale.getDefault())
     ).replaceFirstChar { it.uppercase(Locale.getDefault()) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    medicationBeingEdited = null
-                    showMedicationDialog = true
-                },
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Text("+", fontSize = 28.sp)
-            }
+    val pendingDoses = schedules.mapNotNull { schedule ->
+        val medication = medications.firstOrNull { it.id == schedule.medicationId } ?: return@mapNotNull null
+        val existingLog = doseLogs.firstOrNull {
+            it.medicationId == medication.id &&
+                it.scheduledDate == todayDate &&
+                it.minutesAfterMidnight == schedule.minutesAfterMidnight
         }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (existingLog == null) Pair(schedule, medication) else null
+    }.sortedBy { it.first.minutesAfterMidnight }
+
+    androidx.compose.material3.ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            androidx.compose.material3.ModalDrawerSheet {
                 Text(
                     text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineLarge,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-
-                Text(
-                    text = today,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = stringResource(R.string.home_tagline),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.day_at_a_glance),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Text(
-                        text = when (medications.size) {
-                            0 -> stringResource(R.string.no_medications_yet)
-                            1 -> stringResource(R.string.one_medication_registered)
-                            else -> stringResource(
-                                R.string.medications_registered,
-                                medications.size
-                            )
+                listOf(
+                    "today" to R.string.nav_today,
+                    "medications" to R.string.nav_medications,
+                    "history" to R.string.nav_history
+                ).forEach { (screen, label) ->
+                    androidx.compose.material3.NavigationDrawerItem(
+                        label = { Text(stringResource(label)) },
+                        selected = selectedScreen == screen,
+                        onClick = {
+                            selectedScreen = screen
+                            scope.launch { drawerState.close() }
                         },
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    Text(
-                        text = stringResource(R.string.doses_will_appear),
-                        style = MaterialTheme.typography.bodyMedium
+                        modifier = Modifier.padding(horizontal = 12.dp)
                     )
                 }
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            floatingActionButton = {
+                if (selectedScreen == "medications") {
+                    FloatingActionButton(
+                        onClick = {
+                            medicationBeingEdited = null
+                            showMedicationDialog = true
+                        },
+                        shape = RoundedCornerShape(18.dp)
+                    ) { Text("+", fontSize = 28.sp) }
+                }
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.my_medications),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = medications.size.toString(),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                if (medications.isEmpty()) {
-                    EmptyMedicationCard(
-                        onAddClick = {
-                            medicationBeingEdited = null
-                            showMedicationDialog = true
-                        }
-                    )
-                } else {
-                    medications.forEach { medication ->
-                        MedicationCard(
-                            medication = medication,
-                            schedules = schedules.filter { it.medicationId == medication.id },
-                            onManageSchedule = { medicationForSchedule = medication },
-                            onRefill = { medicationForRefill = medication },
-                            onEdit = {
-                                medicationBeingEdited = medication
-                                showMedicationDialog = true
-                            },
-                            onDelete = { medicationPendingDeletion = medication }
+                    TextButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Text("☰")
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = if (selectedScreen == "today") today else stringResource(
+                                when (selectedScreen) {
+                                    "medications" -> R.string.nav_medications
+                                    else -> R.string.nav_history
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = stringResource(R.string.upcoming_doses),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-
-                val scheduledDoses = schedules.mapNotNull { schedule ->
-                    medications.firstOrNull { it.id == schedule.medicationId }?.let { medication ->
-                        Pair(schedule.minutesAfterMidnight, medication)
-                    }
-                }.sortedBy { it.first }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (scheduledDoses.isEmpty()) {
-                            Text(
-                                text = if (medications.isEmpty()) {
-                                    stringResource(R.string.upcoming_doses_empty)
-                                } else {
-                                    stringResource(R.string.no_schedules_yet)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                when (selectedScreen) {
+                    "today" -> {
+                        Text(
+                            text = stringResource(R.string.today_doses_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (pendingDoses.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.all_done_today),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.all_done_today_detail),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Button(
+                                        onClick = { showOneOffDialog = true },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(R.string.add_one_off_dose))
+                                    }
+                                }
+                            }
                         } else {
+                            pendingDoses.forEach { (schedule, medication) ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        androidx.compose.material3.Checkbox(
+                                            checked = false,
+                                            onCheckedChange = {
+                                                viewModel.markDoseTaken(
+                                                    medication, todayDate, schedule.minutesAfterMidnight
+                                                )
+                                            }
+                                        )
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = String.format(
+                                                    Locale.ROOT, "%02d:%02d",
+                                                    schedule.minutesAfterMidnight / 60,
+                                                    schedule.minutesAfterMidnight % 60
+                                                ),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(medication.name, style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                medication.doseDescription.ifBlank { stringResource(R.string.dose_not_configured) },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            OutlinedTextField(
+                                value = "",
+                                onValueChange = {},
+                                modifier = Modifier.height(0.dp),
+                                enabled = false,
+                                label = { Text("") }
+                            )
+                            TextButton(
+                                onClick = { showOneOffDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.add_one_off_dose))
+                            }
+                        }
+                    }
+
+                    "medications" -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
-                                text = stringResource(R.string.today_schedule),
-                                style = MaterialTheme.typography.titleSmall,
+                                text = stringResource(R.string.my_medications),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = medications.size.toString(),
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            scheduledDoses.forEach { (minutes, medication) ->
-                                val time = String.format(Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60)
-                                Text(
-                                    text = stringResource(R.string.dose_at_time, time, medication.name),
-                                    style = MaterialTheme.typography.bodyMedium
+                        }
+                        if (medications.isEmpty()) {
+                            EmptyMedicationCard(onAddClick = {
+                                medicationBeingEdited = null
+                                showMedicationDialog = true
+                            })
+                        } else {
+                            medications.forEach { medication ->
+                                MedicationCard(
+                                    medication = medication,
+                                    schedules = schedules.filter { it.medicationId == medication.id },
+                                    onManageSchedule = { medicationForSchedule = medication },
+                                    onRefill = { medicationForRefill = medication },
+                                    onEdit = {
+                                        medicationBeingEdited = medication
+                                        showMedicationDialog = true
+                                    },
+                                    onDelete = { medicationPendingDeletion = medication }
                                 )
                             }
                         }
                     }
-                }
-            }
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = stringResource(R.string.dose_history),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (doseLogs.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.no_dose_history),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            doseLogs.take(20).forEach { log ->
-                                DoseHistoryRow(log)
+                    "history" -> {
+                        Text(
+                            text = stringResource(R.string.dose_history),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (doseLogs.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.no_dose_history),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    doseLogs.forEach { log -> DoseHistoryRow(log) }
+                                }
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-
-            Spacer(modifier = Modifier.height(56.dp))
         }
+    }
+
+    if (showOneOffDialog) {
+        OneOffDoseDialog(
+            medications = medications,
+            onDismiss = { showOneOffDialog = false },
+            onSelect = { medication ->
+                val now = java.time.LocalTime.now()
+                viewModel.markDoseTaken(medication, todayDate, now.hour * 60 + now.minute)
+                showOneOffDialog = false
+            }
+        )
     }
 
     if (showMedicationDialog) {
@@ -377,21 +439,15 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
         AlertDialog(
             onDismissRequest = { medicationPendingDeletion = null },
             title = { Text(stringResource(R.string.delete_medication_title)) },
-            text = {
-                Text(stringResource(R.string.delete_medication_message, medication.name))
-            },
+            text = { Text(stringResource(R.string.delete_medication_message, medication.name)) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        schedules.filter { it.medicationId == medication.id }.forEach { schedule ->
-                            DoseAlarmScheduler(context).cancel(medication.id, schedule.minutesAfterMidnight)
-                        }
-                        viewModel.deleteMedication(medication)
-                        medicationPendingDeletion = null
+                TextButton(onClick = {
+                    schedules.filter { it.medicationId == medication.id }.forEach { schedule ->
+                        DoseAlarmScheduler(context).cancel(medication.id, schedule.minutesAfterMidnight)
                     }
-                ) {
-                    Text(stringResource(R.string.delete))
-                }
+                    viewModel.deleteMedication(medication)
+                    medicationPendingDeletion = null
+                }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = {
                 TextButton(onClick = { medicationPendingDeletion = null }) {
@@ -400,6 +456,46 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
             }
         )
     }
+}
+
+@Composable
+private fun OneOffDoseDialog(
+    medications: List<MedicationEntity>,
+    onDismiss: () -> Unit,
+    onSelect: (MedicationEntity) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.one_off_dose_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (medications.isEmpty()) {
+                    Text(stringResource(R.string.one_off_no_medications))
+                } else {
+                    medications.forEach { medication ->
+                        TextButton(
+                            onClick = { onSelect(medication) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(medication.name, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    medication.doseDescription.ifBlank { stringResource(R.string.dose_not_configured) },
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        }
+    )
 }
 
 @Composable
