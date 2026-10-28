@@ -151,7 +151,9 @@ internal class CompanionNetworkServer(
                 var headerCount = 0
                 var headersValid = true
                 var hostHeaderSeen = false
-                var hostHeaderDuplicate = false
+                var hostHeaderCount = 0
+                var contentLengthSeen = false
+                var transferEncodingSeen = false
                 var requestBodyDeclared = false
                 while (headersValid) {
                     val line = readAsciiLine(input, MAX_HEADER_LINE_BYTES)
@@ -180,17 +182,19 @@ internal class CompanionNetworkServer(
                     }
                     when (name) {
                         "host" -> {
-                            if (hostHeaderSeen || hostHeaderDuplicate) {
-                                hostHeaderDuplicate = true
-                            } else {
-                                hostHeaderSeen = value.isNotEmpty()
-                            }
+                            hostHeaderCount++
+                            hostHeaderSeen = value.isNotEmpty()
                         }
                         "content-length" -> {
+                            if (contentLengthSeen) requestBodyDeclared = true
+                            contentLengthSeen = true
                             val length = value.toLongOrNull()
                             if (length == null || length != 0L) requestBodyDeclared = true
                         }
-                        "transfer-encoding" -> requestBodyDeclared = true
+                        "transfer-encoding" -> {
+                            transferEncodingSeen = true
+                            requestBodyDeclared = true
+                        }
                     }
                 }
                 val parts = requestLine.split(" ")
@@ -200,7 +204,8 @@ internal class CompanionNetworkServer(
                     parts[1].startsWith("/") &&
                     parts[1].none { it <= ' ' || it.code == 127 } &&
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
-                val headersSafe = headersValid && !requestBodyDeclared && !hostHeaderDuplicate &&
+                val headersSafe = headersValid && !requestBodyDeclared && !transferEncodingSeen &&
+                    hostHeaderCount <= 1 &&
                     (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen)
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
