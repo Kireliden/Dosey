@@ -4,10 +4,13 @@ Standalone Java 21 desktop client for the local Dosey Companion protocol.
 
 ## Current implementation slice
 
-- Manual LAN host/port entry (discovery can be added once the secure flow is verified).
-- Explicit SHA-256 certificate pinning. Copy the fingerprint shown by the Android Companion service; the client refuses the TLS connection if the presented certificate differs.
-- Pairing request, Android approval polling, one-time credential issuance, and authenticated snapshot refresh.
-- The credential is kept in memory only in this first slice. Do not treat this as release-ready: persistent credential storage and encrypted last-good snapshot caching are still to be implemented.
+- Automatic local-network discovery using the `_dosey._tcp.local.` service.
+- The initial discovery request reads only the public status endpoint to learn the certificate fingerprint. It does not send credentials or request medication data.
+- The desktop then pins the exact SHA-256 certificate for every subsequent HTTPS request.
+- QR pairing: the PC displays a QR containing the discovered endpoint, pinned fingerprint, short-lived request ID, computer name, and six-digit verification code.
+- On Android, open **PC Companion**, enable the service, and tap **Scan PC pairing QR** on the pending request. The app verifies that the QR fingerprint matches its own TLS certificate and that the request ID and code match the pending request before approving it.
+- Pairing approval remains explicit. The QR alone does not grant access to medication data.
+- Authenticated snapshot refresh is available after pairing.
 
 ## Build on Windows
 
@@ -15,20 +18,16 @@ From the repository root:
 
 ```powershell
 cd companion-desktop
-gradle run
-```
-
-If Gradle is not installed globally, use the repository's wrapper from this directory:
-
-```powershell
+..\gradlew.bat compileJava
 ..\gradlew.bat run
 ```
 
-The desktop app requires JDK 21 or newer. The repository wrapper may use a Gradle version configured for the Android project; if the Java plugin is not supported by that wrapper, use a compatible Gradle 8.x installation or add a dedicated wrapper for this subproject.
+The desktop app requires JDK 21 or newer.
 
-## Security notes
+## Security and known limitations
 
-- Never connect using a fingerprint that has not been compared against the fingerprint displayed by Android.
-- The client disables redirects and uses the pinning trust manager for every HTTPS request.
-- The current UI does not persist credentials, medication snapshots, or queued commands.
-- Offline read-only cache, robust service discovery, write-command confirmation UX, and integration tests are follow-up work before release.
+- The bootstrap status request deliberately uses an untrusted TLS connection only to retrieve the server's advertised certificate fingerprint. It must not be used for sensitive data; the actual client connection is immediately re-established with strict certificate pinning.
+- The Android QR scanner independently compares the QR fingerprint with the certificate held by the Android service, and checks the pending request ID, computer name and six-digit code.
+- The credential is currently held in memory only. Secure persistent credential storage and encrypted last-good snapshot caching are not implemented yet.
+- Offline read-only cache, command UX, reconnection polish, and integration tests remain follow-up work before release.
+- This implementation has not yet been verified in a live PC-to-phone pairing session.
