@@ -11,8 +11,7 @@ import com.borealis.dosey.R
 
 /**
  * User-controlled foreground lifecycle for Dosey Companion.
- * The only network route currently exposed is a TLS-encrypted, non-sensitive status endpoint.
- * Medication data remains unavailable until explicit client pairing and authentication exist.
+ * The service is opt-in, visible through a persistent notification, and stoppable by the user.
  */
 class CompanionService : Service() {
     private var networkServer: CompanionNetworkServer? = null
