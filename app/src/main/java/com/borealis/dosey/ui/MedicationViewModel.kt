@@ -36,15 +36,19 @@ class MedicationViewModel(
         existing: MedicationEntity?,
         name: String,
         doseDescription: String,
-        notes: String
+        notes: String,
+        stockQuantity: Int,
+        lowStockThreshold: Int,
+        unitsPerDose: Int
     ) {
         if (name.isBlank()) return
+        if (stockQuantity < -1 || lowStockThreshold < 0 || unitsPerDose < 1) return
 
         viewModelScope.launch {
             if (existing == null) {
-                repository.addMedication(name, doseDescription, notes)
+                repository.addMedication(name, doseDescription, notes, stockQuantity, lowStockThreshold, unitsPerDose)
             } else {
-                repository.updateMedication(existing, name, doseDescription, notes)
+                repository.updateMedication(existing, name, doseDescription, notes, stockQuantity, lowStockThreshold, unitsPerDose)
             }
         }
     }
