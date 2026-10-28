@@ -14,17 +14,24 @@ This document is the implementation contract for the Android host and future des
 
 - `GET /v1/status` is available over TLS and returns protocol version, a generic service label, `pairing_required`, `medicationDataAvailable: false`, and server time.
 - The Android host generates a persistent self-signed RSA certificate in Android Keystore and advertises `_dosey._tcp.` only while Companion is enabled.
-- No medication data, pairing credentials, or write endpoints are available yet. A client must not treat service discovery or the status response as proof of identity; certificate pinning and explicit pairing are still required.
+- `POST /v1/pair/request` accepts a small JSON body containing `clientName`, creates a single short-lived (120-second) request, and returns a request ID plus a six-digit comparison code.
+- Android shows the requesting device and comparison code with explicit Approve/Reject actions. The PC can poll `GET /v1/pair/status?id=<requestId>` for pending/approved/rejected/expired state.
+- Pair requests are in-memory only and are cleared when Companion stops. A second simultaneous request is refused.
+- Approval currently records consent only. It does not issue credentials, authenticate a client, or unlock medication data. The code must be compared with the PC display, but this alone is not a substitute for checking the TLS certificate fingerprint.
 
 ## Pairing
 
+Implemented request/approval foundation:
 1. User enables Companion on Android.
-2. The PC discovers the service and requests pairing over TLS.
-3. Android displays a short-lived pairing code and details of the requesting client.
-4. The user confirms the code and approves the request on Android.
-5. Android issues a random per-client bearer credential, returned only over the pinned TLS connection.
-6. Android stores only a verifier for the credential, supports revocation, and rate-limits failed attempts.
-7. Subsequent sessions require the credential and pinned certificate.
+2. The PC requests pairing over TLS with a display name.
+3. Android shows the short-lived request and six-digit comparison code.
+4. The user checks that the code matches the PC and explicitly approves or rejects.
+5. The PC polls the request status. Requests expire after 120 seconds and are cleared when the service stops.
+
+Still required before a connection can access medical data:
+- The PC must retrieve and display the TLS certificate fingerprint; the user verifies it against Android, and the PC pins that exact certificate.
+- Only after the pinning UX is in place, issue a cryptographically random per-client credential after approval, store a verifier, authenticate each request, and provide per-client revocation and rate limiting.
+- No credential or medical-data endpoint is implemented by this milestone.
 
 ## API shape
 
