@@ -46,5 +46,7 @@ The desktop client is intentionally out of scope for the Android-only foundation
 
 - Added an explicit PC Companion navigation screen and enable/disable control.
 - Added a user-started foreground service with a persistent notification; it does not auto-start.
-- The service intentionally does not yet open a socket or advertise an NSD endpoint. The screen states this clearly. This is a lifecycle/UI foundation, not a working PC connection.
-- Next Android milestone: implement TLS certificate provisioning and the authenticated local listener, then advertise the real listener through NSD. Do not advertise a port before TLS and pairing are implemented.
+- The foreground service now provisions a persistent Android Keystore RSA key/certificate, opens a TLS 1.2/1.3 listener on an ephemeral port, and advertises `_dosey._tcp.` through NSD while enabled.
+- Only `GET /v1/status` is implemented. It returns protocol version and a `pairing_required` state without medication data; other routes return 404. The listener does not accept client certificates and must not be treated as authenticated.
+- Pairing, certificate pinning UX, client credentials, snapshot transfer and write commands are still pending. The future PC client must explicitly pin the certificate during pairing; it must not disable TLS verification globally.
+- The service currently binds the TLS socket to the platform's default server interface selection; because the only route is non-sensitive status, this is a bootstrap milestone rather than the finished security boundary. Before exposing any medication data, implement and test authenticated pairing, access controls, rate limits, and network-interface restrictions.
