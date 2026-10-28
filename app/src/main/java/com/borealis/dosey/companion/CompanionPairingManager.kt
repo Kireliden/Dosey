@@ -24,12 +24,25 @@ internal object CompanionPairingManager {
     private var completedRequestId: String? = null
     private var completedStatus: String? = null
     private var completedAt: Long = 0L
+    private var lastRequestAt: Long = 0L
+    private var recentRequestCount = 0
+    private var rateWindowStartedAt: Long = 0L
 
     @Synchronized
     fun createRequest(clientName: String): Request? {
         val now = System.currentTimeMillis()
         val current = mutablePendingRequest.value
         if (current != null && current.expiresAt > now) return null
+        if (clientName.isBlank() || clientName.length > MAX_CLIENT_NAME_LENGTH) return null
+        if (now - rateWindowStartedAt >= RATE_WINDOW_MS || now < rateWindowStartedAt) {
+            rateWindowStartedAt = now
+            recentRequestCount = 0
+        }
+        if (recentRequestCount >= MAX_REQUESTS_PER_WINDOW ||
+            (lastRequestAt > 0L && now - lastRequestAt < MIN_REQUEST_INTERVAL_MS)
+        ) return null
+        recentRequestCount++
+        lastRequestAt = now
 
         val code = (100_000 + random.nextInt(900_000)).toString()
         completedRequestId = null
@@ -45,8 +58,12 @@ internal object CompanionPairingManager {
     @Synchronized
     fun approve(requestId: String): Boolean {
         val request = mutablePendingRequest.value ?: return false
-        if (request.id != requestId || request.expiresAt <= System.currentTimeMillis()) {
+        if (request.id != requestId) return false
+        if (request.expiresAt <= System.currentTimeMillis()) {
             mutablePendingRequest.value = null
+            completedRequestId = requestId
+            completedStatus = "expired"
+            completedAt = System.currentTimeMillis()
             return false
         }
         mutablePendingRequest.value = null
@@ -106,5 +123,9 @@ internal object CompanionPairingManager {
     }
 
     const val REQUEST_LIFETIME_MS = 120_000L
+    private const val MAX_CLIENT_NAME_LENGTH = 80
+    private const val MAX_REQUESTS_PER_WINDOW = 5
+    private const val RATE_WINDOW_MS = 60_000L
+    private const val MIN_REQUEST_INTERVAL_MS = 5_000L
     private const val RESULT_RETENTION_MS = 120_000L
 }
