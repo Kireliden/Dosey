@@ -399,7 +399,7 @@ internal class CompanionNetworkServer(
             val type = body.optString("type", "")
             val response = when (type) {
                 "record_dose" -> {
-                    require(body.keySet() == allowedBaseKeys + setOf(
+                    require(body.keys().asSequence().toSet() == allowedBaseKeys + setOf(
                         "medicationId", "scheduledDate", "minutesAfterMidnight", "status"
                     )) { "Unexpected command fields" }
                     val medicationId = body.optLong("medicationId", -1L)
