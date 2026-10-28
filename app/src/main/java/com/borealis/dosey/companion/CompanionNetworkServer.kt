@@ -12,8 +12,9 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.util.Date
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
@@ -29,7 +30,7 @@ internal class CompanionNetworkServer(
     private val context: Context,
     private val onStateChanged: (Boolean, String?) -> Unit
 ) {
-    private val executor: ExecutorService = Executors.newCachedThreadPool()
+    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.\n    private val executor = ThreadPoolExecutor(\n        2,\n        4,\n        30L,\n        TimeUnit.SECONDS,\n        ArrayBlockingQueue(16),\n        ThreadPoolExecutor.AbortPolicy()\n    )
     private var serverSocket: SSLServerSocket? = null
     private var nsdManager: NsdManager? = null
     private var registered = false
@@ -159,7 +160,7 @@ internal class CompanionNetworkServer(
                     parts.size == 3 && parts[0] == "GET" &&
                     parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
                 val body = when {
-                    !headersValid -> JSONObject().put("error", "bad_request").toString()
+                    !headersValid || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
                         .put("service", "Dosey Companion")
                         .put("protocolVersion", 1)
@@ -170,7 +171,7 @@ internal class CompanionNetworkServer(
                     else -> JSONObject().put("error", "not_found").toString()
                 }
                 val status = when {
-                    !headersValid -> "400 Bad Request"
+                    !headersValid || !requestLineValid -> "400 Bad Request"
                     isStatusRequest -> "200 OK"
                     else -> "404 Not Found"
                 }
