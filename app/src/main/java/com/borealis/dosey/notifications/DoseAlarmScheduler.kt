@@ -22,9 +22,10 @@ class DoseAlarmScheduler(private val context: Context) {
         val now = LocalDateTime.now()
         var next = now.toLocalDate().atStartOfDay().plusMinutes(schedule.minutesAfterMidnight.toLong())
         if (!next.isAfter(now)) next = next.plusDays(1)
-        alarmManager.setAndAllowWhileIdle(
+        alarmManager.setInexactRepeating(
             AlarmManager.RTC_WAKEUP,
             next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+            AlarmManager.INTERVAL_DAY,
             pendingIntent
         )
     }
