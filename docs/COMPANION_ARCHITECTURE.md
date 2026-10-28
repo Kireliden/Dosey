@@ -52,3 +52,10 @@ The desktop client is intentionally out of scope for the Android-only foundation
 - Approval state is in-memory and cleared when Companion stops. No credentials are issued and no medication data or write endpoints are exposed yet.
 - TLS fingerprint verification/pinning UX, revocable client credentials, authenticated snapshot transfer and write commands are still pending. The future PC client must explicitly pin the certificate during pairing; it must not disable TLS verification globally.
 - The service currently binds the TLS socket to the platform's default server interface selection; because the only route is non-sensitive status, this is a bootstrap milestone rather than the finished security boundary. Before exposing any medication data, implement and test authenticated pairing, access controls, rate limits, and network-interface restrictions.
+
+
+### Credential storage foundation
+
+- Added an isolated Android Keystore-backed credential registry: AES-256-GCM encrypted persistence, 256-bit random per-client bearer tokens, SHA-256 token verifiers only at rest, constant-time verifier comparisons, client metadata listing, and revocation timestamps.
+- The store is intentionally not connected to pairing approval or network routes yet. The desktop certificate-pinning flow must be implemented and tested before any credential is issued. No credential or medication data endpoint is exposed by this milestone.
+- Storage corruption/decryption failure must fail closed; never recreate an empty registry over unreadable existing state.
