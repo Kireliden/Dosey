@@ -54,7 +54,7 @@ The desktop client is intentionally out of scope for the Android-only foundation
 - Authenticated `POST /v1/commands` supports idempotent `record_dose` and `record_one_off` commands. Command receipts and the Room mutation are committed in one transaction, so a retry with the same command ID does not record the dose twice. Taking a scheduled dose uses the same stock-deduction rule as Android.
 - Connections from non-private/non-local IP addresses are refused. TLS is restricted to TLS 1.2/1.3, requests and bodies are bounded, duplicate security-sensitive headers are rejected, and client concurrency is bounded.
 - The PC must still implement strict TLS certificate pinning before it sends a pairing request, and it must never disable TLS verification globally. The Android host cannot prove that a client has pinned its certificate; that guarantee belongs to the PC client and must be validated end-to-end before release.
-- Credential revocation storage is implemented, but a user-facing Android client-management/revocation screen and end-to-end revocation tests remain to be completed. Do not treat the Android side as release-ready until those are done.
+- Android now lists paired computers and allows revoking a credential. The PC must pin the TLS certificate before pairing; this remains an end-to-end responsibility for the desktop implementation and must be tested before release.
 
 
 ### Credential storage foundation
