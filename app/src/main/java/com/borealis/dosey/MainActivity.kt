@@ -63,6 +63,7 @@ import com.borealis.dosey.data.local.MedicationEntity
 import com.borealis.dosey.notifications.DoseAlarmReceiver
 import com.borealis.dosey.notifications.DoseAlarmScheduler
 import com.borealis.dosey.ui.MedicationViewModel
+import com.borealis.dosey.ui.settings.SettingsScreen
 import com.borealis.dosey.ui.theme.DoseyTheme
 import android.Manifest
 import android.content.Intent
@@ -99,15 +100,30 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            DoseyTheme {
-                DoseyHome(viewModel = medicationViewModel)
+            val preferences = remember { getSharedPreferences("dosey_preferences", MODE_PRIVATE) }
+            var selectedTheme by remember {
+                mutableStateOf(preferences.getString("appearance_theme", "frappe") ?: "frappe")
+            }
+            DoseyTheme(themeName = selectedTheme) {
+                DoseyHome(
+                    viewModel = medicationViewModel,
+                    selectedTheme = selectedTheme,
+                    onThemeChange = { theme ->
+                        selectedTheme = theme
+                        preferences.edit().putString("appearance_theme", theme).apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun DoseyHome(viewModel: MedicationViewModel) {
+private fun DoseyHome(
+    viewModel: MedicationViewModel,
+    selectedTheme: String,
+    onThemeChange: (String) -> Unit
+) {
     val context = LocalContext.current
     val medications by viewModel.medications.collectAsStateWithLifecycle()
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
@@ -121,6 +137,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var medicationForSchedule by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
     var selectedScreen by remember { mutableStateOf("today") }
+    var selectedSettingsSection by remember { mutableStateOf("appearance") }
     var companionEnabled by remember { mutableStateOf(false) }
     var companionClients by remember { mutableStateOf(emptyList<CompanionCredentialStore.Client>()) }
     val pendingPairingRequest by CompanionPairingManager.pendingRequest.collectAsStateWithLifecycle()
@@ -188,27 +205,46 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
         drawerState = drawerState,
         drawerContent = {
             androidx.compose.material3.ModalDrawerSheet {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                listOf(
-                    "today" to R.string.nav_today,
-                    "medications" to R.string.nav_medications,
-                    "history" to R.string.nav_history,
-                    "companion" to R.string.nav_companion
-                ).forEach { (screen, label) ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    listOf(
+                        "today" to R.string.nav_today,
+                        "medications" to R.string.nav_medications,
+                        "history" to R.string.nav_history,
+                        "companion" to R.string.nav_companion
+                    ).forEach { (screen, label) ->
+                        androidx.compose.material3.NavigationDrawerItem(
+                            label = { Text(stringResource(label)) },
+                            selected = selectedScreen == screen,
+                            onClick = {
+                                selectedScreen = screen
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     androidx.compose.material3.NavigationDrawerItem(
-                        label = { Text(stringResource(label)) },
-                        selected = selectedScreen == screen,
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("⚙", fontSize = 22.sp)
+                                Text("Settings")
+                            }
+                        },
+                        selected = selectedScreen == "settings",
                         onClick = {
-                            selectedScreen = screen
+                            selectedScreen = "settings"
+                            selectedSettingsSection = "appearance"
                             scope.launch { drawerState.close() }
                         },
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     )
                 }
             }
@@ -256,6 +292,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                 when (selectedScreen) {
                                     "medications" -> R.string.nav_medications
                                     "history" -> R.string.nav_history
+                                    "settings" -> R.string.nav_companion
                                     else -> R.string.nav_companion
                                 }
                             ),
@@ -266,6 +303,14 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                 }
 
                 when (selectedScreen) {
+                    "settings" -> {
+                        SettingsScreen(
+                            section = selectedSettingsSection,
+                            onSectionChange = { selectedSettingsSection = it },
+                            selectedTheme = selectedTheme,
+                            onThemeChange = onThemeChange
+                        )
+                    }
                     "companion" -> {
                         Box(
                             modifier = Modifier
