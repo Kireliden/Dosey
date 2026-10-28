@@ -47,6 +47,7 @@ The desktop client is intentionally out of scope for the Android-only foundation
 - Added an explicit PC Companion navigation screen and enable/disable control.
 - Added a user-started foreground service with a persistent notification; it does not auto-start.
 - The foreground service now provisions a persistent Android Keystore RSA key/certificate, opens a TLS 1.2/1.3 listener on an ephemeral port, and advertises `_dosey._tcp.` through NSD while enabled.
+- Android computes and displays the TLS certificate SHA-256 fingerprint; `GET /v1/status` includes it for diagnostics. The PC must still calculate the fingerprint from the TLS handshake certificate and pin that certificate after the user compares it with Android.
 - `GET /v1/status`, `POST /v1/pair/request`, and `GET /v1/pair/status?id=...` are implemented. Pair requests use a six-digit comparison code, expire after 120 seconds, and require explicit Android approval or rejection.
 - Approval state is in-memory and cleared when Companion stops. No credentials are issued and no medication data or write endpoints are exposed yet.
 - TLS fingerprint verification/pinning UX, revocable client credentials, authenticated snapshot transfer and write commands are still pending. The future PC client must explicitly pin the certificate during pairing; it must not disable TLS verification globally.
