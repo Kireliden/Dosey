@@ -100,15 +100,15 @@ internal class CompanionNetworkServer(
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-                val shouldUnregister = synchronized(this@CompanionNetworkServer) {
+                val wasStopped = synchronized(this@CompanionNetworkServer) {
                     if (running) {
                         registered = true
                         false
                     } else {
-                        false
+                        true
                     }
                 }
-                if (shouldUnregister || !running) {
+                if (wasStopped) {
                     try { manager.unregisterService(this) } catch (_: Exception) { }
                 }
             }
