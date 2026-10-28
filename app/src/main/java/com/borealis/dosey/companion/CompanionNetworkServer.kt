@@ -240,14 +240,22 @@ internal class CompanionNetworkServer(
                         if (count < 0) throw java.io.IOException("Incomplete pairing request body")
                         offset += count
                     }
-                    JSONObject(bytes.toString(Charsets.UTF_8))
+                    try {
+                        JSONObject(bytes.toString(Charsets.UTF_8))
+                    } catch (_: org.json.JSONException) {
+                        null
+                    }
                 } else null
-                val pairingRequest = if (pairRequestBody != null) {
-                    val clientName = pairRequestBody.optString("clientName", "Unknown PC").trim()
-                    if (clientName.length > 80) null
-                    else CompanionPairingManager.createRequest(clientName)
+                val clientNameValue = pairRequestBody?.opt("clientName")
+                val pairRequestInputValid = pairRequestBody != null &&
+                    pairRequestBody.length() == 1 &&
+                    clientNameValue is String &&
+                    clientNameValue.isNotBlank() &&
+                    clientNameValue.length <= 80
+                val pairingRequest = if (pairRequestInputValid) {
+                    CompanionPairingManager.createRequest(clientNameValue as String)
                 } else null
-                val pairRequestValid = isPairRequest && pairRequestBody != null && pairingRequest != null
+                val pairRequestValid = isPairRequest && pairRequestInputValid && pairingRequest != null
                 val body = when {
                     !headersSafe || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
@@ -269,12 +277,19 @@ internal class CompanionNetworkServer(
                         .put("expiresAt", pairingRequest.expiresAt)
                         .put("status", "awaiting_android_approval")
                         .toString()
-                    isPairRequest -> JSONObject().put("error", if (pairRequestBody == null) "invalid_pairing_request" else "pairing_request_already_pending").toString()
+                    isPairRequest -> JSONObject().put(
+                        "error",
+                        when {
+                            !pairRequestInputValid -> "invalid_pairing_request"
+                            else -> "pairing_request_busy_or_rate_limited"
+                        }
+                    ).toString()
                     else -> JSONObject().put("error", "not_found").toString()
                 }
                 val status = when {
                     !headersSafe || !requestLineValid -> "400 Bad Request"
                     isStatusRequest || pairStatusRequest || pairRequestValid -> "200 OK"
+                    isPairRequest && !pairRequestInputValid -> "400 Bad Request"
                     isPairRequest -> "409 Conflict"
                     else -> "404 Not Found"
                 }
