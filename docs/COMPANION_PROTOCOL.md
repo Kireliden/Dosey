@@ -12,8 +12,8 @@ This document is the implementation contract for the Android host and future des
 
 ## Current bootstrap implementation
 
-- `GET /v1/status` is available over TLS and returns protocol version, a generic service label, `pairing_required`, `medicationDataAvailable: false`, and server time.
-- The Android host generates a persistent self-signed RSA certificate in Android Keystore and advertises `_dosey._tcp.` only while Companion is enabled.
+- `GET /v1/status` is available over TLS and returns protocol version, a generic service label, pairing state, `medicationDataAvailable: false`, the server time, and `certificateSha256` (uppercase SHA-256 hex bytes separated by colons).
+- The Android host generates a persistent self-signed RSA certificate in Android Keystore and advertises `_dosey._tcp.` only while Companion is enabled. Android displays the certificate SHA-256 fingerprint while Companion is running.
 - `POST /v1/pair/request` accepts a small JSON body containing `clientName`, creates a single short-lived (120-second) request, and returns a request ID plus a six-digit comparison code.
 - Android shows the requesting device and comparison code with explicit Approve/Reject actions. The PC can poll `GET /v1/pair/status?id=<requestId>` for pending/approved/rejected/expired state.
 - Pair requests are in-memory only and are cleared when Companion stops. A second simultaneous request is refused.
@@ -29,7 +29,7 @@ Implemented request/approval foundation:
 5. The PC polls the request status. Requests expire after 120 seconds and are cleared when the service stops.
 
 Still required before a connection can access medical data:
-- The PC must retrieve and display the TLS certificate fingerprint; the user verifies it against Android, and the PC pins that exact certificate.
+- The PC must compute the SHA-256 fingerprint from the certificate presented during the TLS handshake, display it, and let the user compare it with Android. The PC must pin that exact certificate before treating the connection as trusted; the fingerprint returned inside `/v1/status` is informational and must not itself be trusted before certificate pinning.
 - Only after the pinning UX is in place, issue a cryptographically random per-client credential after approval, store a verifier, authenticate each request, and provide per-client revocation and rate limiting.
 - No credential or medical-data endpoint is implemented by this milestone.
 
