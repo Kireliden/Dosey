@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class, OneOffDoseEntity::class, CompanionSyncMetadataEntity::class],
-    version = 6,
+    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class, OneOffDoseEntity::class, CompanionSyncMetadataEntity::class, CompanionCommandReceiptEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class DoseyDatabase : RoomDatabase() {
@@ -18,6 +18,7 @@ abstract class DoseyDatabase : RoomDatabase() {
     abstract fun doseLogDao(): DoseLogDao
     abstract fun oneOffDoseDao(): OneOffDoseDao
     abstract fun companionSyncMetadataDao(): CompanionSyncMetadataDao
+    abstract fun companionCommandReceiptDao(): CompanionCommandReceiptDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -86,6 +87,18 @@ abstract class DoseyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS companion_command_receipts (
+                        commandId TEXT NOT NULL PRIMARY KEY,
+                        responseJson TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         private fun installCompanionRevisionTracking(db: SupportSQLiteDatabase) {
             db.execSQL("INSERT OR IGNORE INTO companion_sync_metadata (id, revision) VALUES (1, 1)")
             val tables = listOf(
@@ -119,7 +132,7 @@ abstract class DoseyDatabase : RoomDatabase() {
                     context.applicationContext,
                     DoseyDatabase::class.java,
                     "dosey.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
