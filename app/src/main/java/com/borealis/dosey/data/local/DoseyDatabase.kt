@@ -59,7 +59,7 @@ abstract class DoseyDatabase : RoomDatabase() {
 
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(\"\"\"
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS one_off_dose_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         medicationName TEXT NOT NULL,
@@ -68,7 +68,7 @@ abstract class DoseyDatabase : RoomDatabase() {
                         minutesAfterMidnight INTEGER NOT NULL,
                         recordedAt INTEGER NOT NULL
                     )
-                \"\"\".trimIndent())
+                """.trimIndent())
             }
         }
 
