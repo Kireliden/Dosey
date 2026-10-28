@@ -57,6 +57,11 @@ class MedicationRepository(
         )
     }
 
+    suspend fun refillMedication(medicationId: Long, units: Int) {
+        if (units <= 0) return
+        medicationDao.addStock(medicationId, units)
+    }
+
     fun observeDoseLogs(): Flow<List<DoseLogEntity>> = doseLogDao.observeAll()
 
     fun observeSchedules(): Flow<List<DoseScheduleEntity>> =
