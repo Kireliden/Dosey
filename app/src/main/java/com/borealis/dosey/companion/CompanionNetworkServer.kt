@@ -427,7 +427,7 @@ internal class CompanionNetworkServer(
                         .put("type", type).put("createdOrUpdated", true)
                 }
                 "record_one_off" -> {
-                    require(body.keySet() == allowedBaseKeys + setOf(
+                    require(body.keys().asSequence().toSet() == allowedBaseKeys + setOf(
                         "medicationName", "doseDescription", "scheduledDate", "minutesAfterMidnight"
                     )) { "Unexpected command fields" }
                     val name = body.optString("medicationName", "").trim()
