@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borealis.dosey.companion.CompanionService
+import com.borealis.dosey.companion.CompanionPairingManager
 import com.borealis.dosey.data.MedicationRepository
 import com.borealis.dosey.data.local.DoseLogEntity
 import com.borealis.dosey.data.local.DoseScheduleEntity
@@ -67,6 +69,7 @@ import androidx.core.content.ContextCompat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -109,6 +112,13 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
     var selectedScreen by remember { mutableStateOf("today") }
     var companionEnabled by remember { mutableStateOf(false) }
+    val pendingPairingRequest by CompanionPairingManager.pendingRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(companionEnabled) {
+        while (companionEnabled) {
+            CompanionPairingManager.clearExpired()
+            delay(1000)
+        }
+    }
     val drawerState = androidx.compose.material3.rememberDrawerState(
         initialValue = androidx.compose.material3.DrawerValue.Closed
     )
@@ -255,6 +265,36 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                         if (companionEnabled) R.string.companion_disable
                                         else R.string.companion_enable
                                     ))
+                                }
+                                if (companionEnabled && pendingPairingRequest != null) {
+                                    val request = pendingPairingRequest!!
+                                    androidx.compose.material3.HorizontalDivider()
+                                    Text(
+                                        text = stringResource(R.string.companion_pair_request_title),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(stringResource(R.string.companion_pair_request_client, request.clientName))
+                                    Text(
+                                        text = request.verificationCode,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(stringResource(R.string.companion_pair_request_code_help))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        TextButton(
+                                            onClick = { CompanionPairingManager.reject(request.id) },
+                                            modifier = Modifier.weight(1f)
+                                        ) { Text(stringResource(R.string.companion_pair_reject)) }
+                                        Button(
+                                            onClick = { CompanionPairingManager.approve(request.id) },
+                                            modifier = Modifier.weight(1f)
+                                        ) { Text(stringResource(R.string.companion_pair_approve)) }
+                                    }
                                 }
                             }
                         }
