@@ -34,6 +34,7 @@ internal class CompanionNetworkServer(
     private var serverSocket: SSLServerSocket? = null
     private var nsdManager: NsdManager? = null
     private var registered = false
+    private var registrationListener: NsdManager.RegistrationListener? = null
     @Volatile private var running = false
 
     @Synchronized
@@ -77,16 +78,11 @@ internal class CompanionNetworkServer(
         try { serverSocket?.close() } catch (_: Exception) { }
         serverSocket = null
         val manager = nsdManager
-        if (manager != null && registered) {
-            try {
-                manager.unregisterService(object : NsdManager.RegistrationListener {
-                    override fun onServiceRegistered(serviceInfo: NsdServiceInfo) = Unit
-                    override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
-                    override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) { registered = false }
-                    override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) { registered = false }
-                })
-            } catch (_: Exception) { }
+        val listener = registrationListener
+        if (manager != null && listener != null && registered) {
+            try { manager.unregisterService(listener) } catch (_: Exception) { }
         }
+        registrationListener = null
         registered = false
         onStateChanged(false, null)
     }
@@ -100,7 +96,7 @@ internal class CompanionNetworkServer(
             setPort(port)
             setAttribute("protocol", "1")
         }
-        manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, object : NsdManager.RegistrationListener {
+        val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) { registered = true }
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 onStateChanged(false, "Local network discovery failed ($errorCode)")
@@ -109,7 +105,9 @@ internal class CompanionNetworkServer(
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 onStateChanged(false, "Could not stop local network discovery ($errorCode)")
             }
-        })
+        }
+        registrationListener = listener
+        manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
     }
 
     private fun handleClient(socket: Socket) {
