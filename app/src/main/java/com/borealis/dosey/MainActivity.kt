@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,11 +47,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borealis.dosey.data.MedicationRepository
+import com.borealis.dosey.data.local.DoseLogEntity
 import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.DoseyDatabase
 import com.borealis.dosey.data.local.MedicationEntity
+import com.borealis.dosey.notifications.DoseAlarmReceiver
+import com.borealis.dosey.notifications.DoseAlarmScheduler
 import com.borealis.dosey.ui.MedicationViewModel
 import com.borealis.dosey.ui.theme.DoseyTheme
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -60,7 +70,8 @@ class MainActivity : ComponentActivity() {
         MedicationViewModel.Factory(
             MedicationRepository(
                 DoseyDatabase.getInstance(applicationContext).medicationDao(),
-                DoseyDatabase.getInstance(applicationContext).doseScheduleDao()
+                DoseyDatabase.getInstance(applicationContext).doseScheduleDao(),
+                DoseyDatabase.getInstance(applicationContext).doseLogDao()
             )
         )
     }
@@ -81,6 +92,7 @@ class MainActivity : ComponentActivity() {
 private fun DoseyHome(viewModel: MedicationViewModel) {
     val medications by viewModel.medications.collectAsStateWithLifecycle()
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
+    val doseLogs by viewModel.doseLogs.collectAsStateWithLifecycle()
     var showMedicationDialog by remember { mutableStateOf(false) }
     var medicationBeingEdited by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationPendingDeletion by remember { mutableStateOf<MedicationEntity?>(null) }
@@ -266,6 +278,35 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                 }
             }
 
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = stringResource(R.string.dose_history),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (doseLogs.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.no_dose_history),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            doseLogs.take(20).forEach { log ->
+                                DoseHistoryRow(log)
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(56.dp))
         }
     }
@@ -285,12 +326,24 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
         )
     }
 
+    val context = LocalContext.current
+
     medicationForSchedule?.let { medication ->
         DoseScheduleDialog(
+            context = context,
             medication = medication,
             schedules = schedules.filter { it.medicationId == medication.id },
-            onAdd = { minutes -> viewModel.addSchedule(medication.id, minutes) },
-            onDelete = viewModel::deleteSchedule,
+            onAdd = { minutes ->
+                viewModel.addSchedule(medication.id, minutes)
+                DoseAlarmScheduler(context).schedule(
+                    medication,
+                    DoseScheduleEntity(medicationId = medication.id, minutesAfterMidnight = minutes)
+                )
+            },
+            onDelete = { schedule ->
+                DoseAlarmScheduler(context).cancel(medication.id, schedule.minutesAfterMidnight)
+                viewModel.deleteSchedule(schedule)
+            },
             onDismiss = { medicationForSchedule = null }
         )
     }
@@ -453,13 +506,27 @@ private fun MedicationCard(
 }
 
 @Composable
+private fun DoseHistoryRow(log: DoseLogEntity) {
+    val time = String.format(Locale.ROOT, "%02d:%02d", log.minutesAfterMidnight / 60, log.minutesAfterMidnight % 60)
+    val statusText = stringResource(if (log.status == DoseAlarmReceiver.STATUS_TAKEN) R.string.status_taken else R.string.status_missed)
+    Text(
+        text = stringResource(R.string.history_entry, log.scheduledDate, time, "${log.medicationName} · $statusText"),
+        style = MaterialTheme.typography.bodyMedium
+    )
+}
+
+@Composable
 private fun DoseScheduleDialog(
+    context: android.content.Context,
     medication: MedicationEntity,
     schedules: List<DoseScheduleEntity>,
     onAdd: (Int) -> Unit,
     onDelete: (DoseScheduleEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
     var timeText by remember(medication.id) { mutableStateOf("") }
     var showInvalidTime by remember(medication.id) { mutableStateOf(false) }
 
@@ -499,6 +566,11 @@ private fun DoseScheduleDialog(
                             showInvalidTime = true
                         } else {
                             onAdd(hour * 60 + minute)
+                            if (Build.VERSION.SDK_INT >= 33 &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                             timeText = ""
                             showInvalidTime = false
                         }
