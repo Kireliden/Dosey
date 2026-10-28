@@ -59,13 +59,13 @@ The desktop client is intentionally out of scope for the Android-only foundation
 
 ### Credential storage foundation
 
-- Added an isolated Android Keystore-backed credential registry: AES-256-GCM encrypted persistence, 256-bit random per-client bearer tokens, SHA-256 token verifiers only at rest, constant-time verifier comparisons, client metadata listing, and revocation timestamps.
-- The store is intentionally not connected to pairing approval or network routes yet. The desktop certificate-pinning flow must be implemented and tested before any credential is issued. No credential or medication data endpoint is exposed by this milestone.
-- Storage corruption/decryption failure must fail closed; never recreate an empty registry over unreadable existing state.
+- Android issues random 256-bit per-PC bearer credentials only after an approved request is confirmed with its six-digit code. The registry is encrypted with AES-256-GCM using an Android Keystore key; only SHA-256 verifiers are stored.
+- The Android Companion screen lists paired computers and supports per-client revocation. Revocation is checked on every authenticated request.
+- Storage corruption/decryption failure fails closed; the app must never recreate an empty registry over unreadable existing state.
 
 
 ### Snapshot preparation foundation
 
-- Added suspend DAO queries and an internal exporter that captures medications, schedules, scheduled-dose logs, one-off logs, and the durable snapshot revision within one Room transaction. JSON includes protocol version, generation timestamp, and revision.
-- Database migration v5→v6 adds revision metadata and SQLite triggers for insert/update/delete on every exported table. This captures writes regardless of whether they originate in the repository, notification receiver, or future Companion commands.
-- This is not an HTTP endpoint and cannot be called by a LAN client. Certificate-pinned pairing, authenticated identity, and end-to-end tests are still required before exposing any snapshot.
+- The exporter returns medications, schedules, scheduled-dose logs, one-off logs, and the durable revision from a single Room transaction. The authenticated snapshot and changes routes currently send a full snapshot.
+- Database migration v5→v6 adds revision metadata and triggers for insert/update/delete on exported tables. Migration v6→v7 adds durable idempotency receipts for PC commands.
+- Authenticated commands support scheduled dose status and one-off dose records. The receipt and data mutation are committed atomically; duplicate command IDs replay the previous result.
