@@ -6,8 +6,6 @@ import android.net.nsd.NsdServiceInfo
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.math.BigInteger
 import java.net.Socket
 import java.security.KeyPairGenerator
@@ -133,13 +131,13 @@ internal class CompanionNetworkServer(
                 val client = raw as javax.net.ssl.SSLSocket
                 client.soTimeout = 4000
                 client.startHandshake()
-                val reader = BufferedReader(InputStreamReader(client.inputStream, Charsets.US_ASCII))
-                val requestLine = reader.readLine() ?: return
+                val input = client.inputStream
+                val requestLine = readAsciiLine(input, MAX_REQUEST_LINE_BYTES) ?: return
                 var headerBytes = 0
                 var headerCount = 0
-                var headersValid = requestLine.length <= MAX_REQUEST_LINE_BYTES
+                var headersValid = true
                 while (headersValid) {
-                    val line = reader.readLine()
+                    val line = readAsciiLine(input, MAX_HEADER_LINE_BYTES)
                     if (line == null) {
                         headersValid = false
                         break
@@ -186,6 +184,20 @@ internal class CompanionNetworkServer(
                 // Invalid or interrupted clients are intentionally ignored.
             }
         }
+    }
+
+    private fun readAsciiLine(input: java.io.InputStream, maxLength: Int): String? {
+        val line = StringBuilder()
+        while (line.length <= maxLength) {
+            val value = input.read()
+            if (value == -1) return if (line.isEmpty()) null else line.toString()
+            if (value == '\\n'.code) {
+                if (line.isNotEmpty() && line.last() == '\\r') line.setLength(line.length - 1)
+                return line.toString()
+            }
+            line.append(value.toChar())
+        }
+        throw java.io.IOException("HTTP line exceeds allowed length")
     }
 
     private fun createServerSslContext(): SSLContext {
@@ -235,6 +247,7 @@ internal class CompanionNetworkServer(
         private const val KEY_ALIAS = "dosey_companion_tls"
         private const val CERT_VALIDITY_MS = 10L * 365 * 24 * 60 * 60 * 1000
         private const val MAX_REQUEST_LINE_BYTES = 2048
+        private const val MAX_HEADER_LINE_BYTES = 2048
         private const val MAX_HEADER_BYTES = 8192
         private const val MAX_HEADER_COUNT = 64
     }
