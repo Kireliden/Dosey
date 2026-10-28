@@ -30,7 +30,7 @@ internal class CompanionNetworkServer(
     private val context: Context,
     private val onStateChanged: (Boolean, String?) -> Unit
 ) {
-    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.\n    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.
+    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.
     private val executor = ThreadPoolExecutor(
         2,
         4,
@@ -68,7 +68,12 @@ internal class CompanionNetworkServer(
                 while (running) {
                     try {
                         val client = socket.accept()
-                        executor.execute { handleClient(client) }
+                        try {
+                            executor.execute { handleClient(client) }
+                        } catch (_: java.util.concurrent.RejectedExecutionException) {
+                            // Refuse excess connections rather than growing without bound.
+                            try { client.close() } catch (_: Exception) { }
+                        }
                     } catch (e: Exception) {
                         if (running) throw e
                     }
@@ -164,9 +169,11 @@ internal class CompanionNetworkServer(
                     }
                 }
                 val parts = requestLine.split(" ")
-                val isStatusRequest = headersValid &&
-                    parts.size == 3 && parts[0] == "GET" &&
-                    parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
+                val requestLineValid = parts.size == 3 &&
+                    parts[0].isNotBlank() && parts[1].startsWith("/") &&
+                    (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
+                val isStatusRequest = headersValid && requestLineValid &&
+                    parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
                 val body = when {
                     !headersValid || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
