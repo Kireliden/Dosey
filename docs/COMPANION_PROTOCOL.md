@@ -40,6 +40,8 @@ Still required before a connection can access medical data:
 - POST /v1/pair/confirm: confirms the approved short-lived code and returns the client credential once.
 - GET /v1/snapshot: returns a consistent, versioned snapshot of medications, schedules, dose logs and one-off dose logs. Requires `Authorization: Bearer <credential>`.
 - POST /v1/commands: accepts authenticated `record_dose` and `record_one_off` commands. Each body includes a UUID `commandId`; duplicate command IDs replay the original response without repeating the mutation. Android commits the command receipt and Room mutation in the same transaction before returning success.
+  - `record_dose`: `commandId`, `type`, `medicationId`, `scheduledDate` (YYYY-MM-DD), `minutesAfterMidnight` (0–1439), `status` (`TAKEN` or `MISSED`).
+  - `record_one_off`: `commandId`, `type`, `medicationName`, `doseDescription`, `scheduledDate` (YYYY-MM-DD), `minutesAfterMidnight` (0–1439).
 - GET /v1/changes?after=<revision>: currently returns a full snapshot, with `resetRequired` indicating whether the requested revision differs from the current revision. Partial change-feed optimisation is deferred until the desktop client exists.
 
 All authenticated responses include a monotonically increasing snapshot revision. Writes must include an idempotency key so retrying after a dropped response cannot record the same dose twice.
@@ -61,7 +63,7 @@ The desktop client stores the last valid snapshot and the timestamp it was recei
 
 Android now has an isolated storage component for future per-PC credentials. It generates 256-bit random bearer tokens, persists only SHA-256 token verifiers, and encrypts the client registry with AES-256-GCM using a key held by Android Keystore. The API supports listing client metadata, constant-time verifier comparison, and revoking a client. Raw tokens are returned only once by the issuance method.
 
-This component is wired to approved pairing and bearer-token authentication. Corrupt or undecryptable stored state fails closed rather than being silently replaced. The store supports revocation, but the Android user-facing client-management UI remains pending. The desktop client must pin the certificate before pairing; that cannot be verified end-to-end until the PC client exists.
+This component is wired to approved pairing and bearer-token authentication. Corrupt or undecryptable stored state fails closed rather than being silently replaced. The store supports revocation, and Android exposes a paired-computer list with per-client revoke controls. The desktop client must pin the certificate before pairing; that cannot be verified end-to-end until the PC client exists.
 
 
 ## Snapshot preparation foundation
