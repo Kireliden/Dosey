@@ -167,7 +167,7 @@ public final class DoseyCompanionApp {
     }
 
     private void requestPairing() {
-        PinnedPinnedHttpClient current = client;
+        PinnedHttpClient current = client;
         String url = baseUrl;
         if (current == null || url == null) return;
         String name = clientNameField.getText().trim();
