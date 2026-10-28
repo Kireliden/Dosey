@@ -173,8 +173,13 @@ public final class DoseyCompanionApp {
                 String details = interfaceNotes.isEmpty() ? "" : "\\nInterfaces checked: " + String.join("; ", interfaceNotes);
                 throw new IOException("No Dosey Companion found via mDNS. Confirm the phone's Companion server is running and the Wi-Fi allows devices to see each other. Windows VPNs, virtual adapters, or router client isolation can prevent discovery." + details);
             }
-            if (service.getInetAddresses().length == 0) throw new IOException("Dosey was discovered, but no IP address was returned.");
-            String host = service.getInetAddresses()[0].getHostAddress();
+            InetAddress[] serviceAddresses = service.getInetAddresses();
+            if (serviceAddresses.length == 0) throw new IOException("Dosey was discovered, but no IP address was returned.");
+            InetAddress selectedAddress = java.util.Arrays.stream(serviceAddresses)
+                .filter(address -> address instanceof Inet4Address)
+                .findFirst()
+                .orElse(serviceAddresses[0]);
+            String host = selectedAddress.getHostAddress();
             int port = service.getPort();
             String fingerprint = readAdvertisedFingerprint(host, port);
             if (fingerprint.length() != 64 || !fingerprint.matches("[0-9a-f]{64}")) {
