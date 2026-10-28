@@ -76,7 +76,7 @@ public final class DoseyCompanionApp {
         c.gridx = 1; c.weightx = 1; connection.add(hostField, c);
         c.gridx = 2; c.weightx = 0; connection.add(label("Port"), c);
         c.gridx = 3; connection.add(portField, c);
-        c.gridx = 0; c.gridy = 1; connection.add(label("TLS SHA-256 fingerprint"), c);
+        c.gridx = 0; c.gridy = 1; connection.add(label("Certificate pin (filled automatically)"), c);
         c.gridx = 1; c.gridwidth = 3; c.weightx = 1; connection.add(fingerprintField, c);
         c.gridx = 0; c.gridy = 2; c.gridwidth = 1; c.weightx = 0; connection.add(label("Computer name"), c);
         c.gridx = 1; c.gridwidth = 3; c.weightx = 1; connection.add(clientNameField, c);
@@ -115,8 +115,8 @@ public final class DoseyCompanionApp {
         root.add(new JScrollPane(outputArea), BorderLayout.CENTER);
         root.add(statusLabel, BorderLayout.SOUTH);
         frame.setContentPane(root);
-        append("Before connecting, enable Companion on Android and copy its TLS SHA-256 fingerprint here.\n"
-            + "Use the Android device's LAN IP and the discovered service port. The certificate is never trusted automatically.\n");
+        append("Enable Companion on Android, then click Find Dosey on network.\n"
+            + "Dosey discovers the phone, verifies its certificate pin, and displays a QR code for secure pairing.\n");
         pairButton.setEnabled(false);
         snapshotButton.setEnabled(false);
     }
