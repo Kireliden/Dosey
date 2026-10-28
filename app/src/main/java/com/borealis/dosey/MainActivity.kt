@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borealis.dosey.companion.CompanionService
 import com.borealis.dosey.companion.CompanionNetworkServer
+import com.borealis.dosey.companion.CompanionCredentialStore
 import com.borealis.dosey.companion.CompanionPairingManager
 import com.borealis.dosey.data.MedicationRepository
 import com.borealis.dosey.data.local.DoseLogEntity
@@ -113,8 +114,14 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
     var selectedScreen by remember { mutableStateOf("today") }
     var companionEnabled by remember { mutableStateOf(false) }
+    var companionClients by remember { mutableStateOf(emptyList<CompanionCredentialStore.Client>()) }
     val pendingPairingRequest by CompanionPairingManager.pendingRequest.collectAsStateWithLifecycle()
     val companionFingerprint by CompanionNetworkServer.certificateFingerprint.collectAsStateWithLifecycle()
+    LaunchedEffect(selectedScreen, companionEnabled) {
+        if (selectedScreen == "companion" && companionEnabled) {
+            companionClients = runCatching { CompanionCredentialStore.list(context) }.getOrDefault(emptyList())
+        }
+    }
     LaunchedEffect(companionEnabled) {
         while (companionEnabled) {
             CompanionPairingManager.clearExpired()
@@ -313,6 +320,54 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                             onClick = { CompanionPairingManager.approve(request.id) },
                                             modifier = Modifier.weight(1f)
                                         ) { Text(stringResource(R.string.companion_pair_approve)) }
+                                    }
+                                }
+                                if (companionEnabled) {
+                                    androidx.compose.material3.HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Paired computers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        TextButton(onClick = {
+                                            companionClients = runCatching {
+                                                CompanionCredentialStore.list(context)
+                                            }.getOrDefault(emptyList())
+                                        }) { Text("Refresh") }
+                                    }
+                                    if (companionClients.isEmpty()) {
+                                        Text(
+                                            "No paired computers yet.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else {
+                                        companionClients.forEach { client ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(client.name, style = MaterialTheme.typography.bodyLarge)
+                                                    Text(
+                                                        if (client.revokedAt == null) "Paired" else "Access revoked",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                if (client.revokedAt == null) {
+                                                    TextButton(onClick = {
+                                                        if (CompanionCredentialStore.revoke(context, client.id)) {
+                                                            companionClients = runCatching {
+                                                                CompanionCredentialStore.list(context)
+                                                            }.getOrDefault(emptyList())
+                                                        }
+                                                    }) { Text("Revoke") }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
