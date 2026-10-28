@@ -24,6 +24,16 @@
     <string name="today_schedule">Your scheduled doses</string>
     <string name="dose_at_time">%1$s · %2$s</string>
     <string name="remove_time">Remove time</string>
+    <string name="notification_channel_name">Medication reminders</string>
+    <string name="dose_reminder_title">Time for your medication</string>
+    <string name="dose_reminder_message">%1$s · scheduled for %2$s</string>
+    <string name="mark_taken">Taken</string>
+    <string name="mark_missed">Missed</string>
+    <string name="dose_history">Dose history</string>
+    <string name="no_dose_history">Your recorded doses will appear here.</string>
+    <string name="history_entry">%1$s · %2$s · %3$s</string>
+    <string name="status_taken">Taken</string>
+    <string name="status_missed">Missed</string>
     <string name="new_medication">New medication</string>
     <string name="edit_medication_title">Edit medication details</string>
     <string name="medication_name_question">What is the medication called?</string>
