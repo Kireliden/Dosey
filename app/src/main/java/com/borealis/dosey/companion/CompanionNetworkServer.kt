@@ -85,6 +85,7 @@ internal class CompanionNetworkServer(
         }
         registrationListener = null
         registered = false
+        executor.shutdownNow()
         onStateChanged(false, null)
     }
 
@@ -98,11 +99,26 @@ internal class CompanionNetworkServer(
             setAttribute("protocol", "1")
         }
         val listener = object : NsdManager.RegistrationListener {
-            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) { registered = true }
-            override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                onStateChanged(false, "Local network discovery failed ($errorCode)")
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                val shouldUnregister = synchronized(this@CompanionNetworkServer) {
+                    if (running) {
+                        registered = true
+                        false
+                    } else {
+                        false
+                    }
+                }
+                if (shouldUnregister || !running) {
+                    try { manager.unregisterService(this) } catch (_: Exception) { }
+                }
             }
-            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) { registered = false }
+            override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                synchronized(this@CompanionNetworkServer) { registered = false }
+                if (running) onStateChanged(false, "Local network discovery failed ($errorCode)")
+            }
+            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
+                synchronized(this@CompanionNetworkServer) { registered = false }
+            }
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 onStateChanged(false, "Could not stop local network discovery ($errorCode)")
             }
