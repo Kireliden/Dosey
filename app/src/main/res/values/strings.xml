@@ -83,4 +83,17 @@
     <string name="delete_medication_message">“%1$s” will be removed from your medication list. This can’t be undone.</string>
     <string name="dose_not_configured">Dose not configured</string>
     <string name="date_pattern">EEEE, d MMMM</string>
+    <string name="nav_companion">PC Companion</string>
+    <string name="companion_title">Dosey Companion</string>
+    <string name="companion_description">Prepare a secure local connection to view and manage your medication data from your PC.</string>
+    <string name="companion_enable">Enable Companion</string>
+    <string name="companion_disable">Disable Companion</string>
+    <string name="companion_enabled_title">Companion is enabled</string>
+    <string name="companion_enabled_detail">The foreground service is running. The secure network listener and device pairing are not available yet, so no PC can connect in this build.</string>
+    <string name="companion_disabled_title">Companion is disabled</string>
+    <string name="companion_disabled_detail">No companion service is running.</string>
+    <string name="companion_notification_channel">Dosey Companion</string>
+    <string name="companion_notification_description">Shows when you have manually enabled Dosey Companion.</string>
+    <string name="companion_notification_title">Dosey Companion enabled</string>
+    <string name="companion_notification_message">Secure local connection is not available yet.</string>
 </resources>
