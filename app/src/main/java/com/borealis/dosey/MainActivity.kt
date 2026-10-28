@@ -464,7 +464,6 @@ private fun OneOffDoseDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var dose by remember { mutableStateOf("") }
-    var selectedSuggestion by remember { mutableStateOf<String?>(null) }
     var validationError by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -483,7 +482,6 @@ private fun OneOffDoseDialog(
                     suggestions.forEach { suggestion ->
                         TextButton(
                             onClick = {
-                                selectedSuggestion = suggestion.medicationName
                                 name = suggestion.medicationName
                                 dose = suggestion.doseDescription
                                 validationError = false
@@ -509,7 +507,7 @@ private fun OneOffDoseDialog(
                 }
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it; selectedSuggestion = null; validationError = false },
+                    onValueChange = { name = it; validationError = false },
                     label = { Text(stringResource(R.string.one_off_medication_name)) },
                     singleLine = true,
                     isError = validationError
