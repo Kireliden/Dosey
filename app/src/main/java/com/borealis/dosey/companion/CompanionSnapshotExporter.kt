@@ -10,10 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Builds a consistent, versioned-format snapshot from Room.
- *
- * This is an internal data preparation layer only. It is not connected to any HTTP route;
- * authenticated access control must be complete before medication data can leave the device.
+ * Builds a consistent, versioned-format snapshot from Room for authenticated Companion routes.
  */
 internal object CompanionSnapshotExporter {
     data class Snapshot(
