@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.borealis.dosey.data.MedicationRepository
+import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.MedicationEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -12,6 +13,12 @@ import kotlinx.coroutines.launch
 class MedicationViewModel(
     private val repository: MedicationRepository
 ) : ViewModel() {
+    val schedules = repository.observeSchedules().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
     val medications = repository.observeMedications().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -32,6 +39,19 @@ class MedicationViewModel(
             } else {
                 repository.updateMedication(existing, name, doseDescription, notes)
             }
+        }
+    }
+
+    fun addSchedule(medicationId: Long, minutesAfterMidnight: Int) {
+        if (minutesAfterMidnight !in 0..1439) return
+        viewModelScope.launch {
+            repository.addSchedule(medicationId, minutesAfterMidnight)
+        }
+    }
+
+    fun deleteSchedule(schedule: DoseScheduleEntity) {
+        viewModelScope.launch {
+            repository.deleteSchedule(schedule)
         }
     }
 
