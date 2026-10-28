@@ -59,8 +59,12 @@ internal class CompanionNetworkServer(
             try {
                 val sslContext = createServerSslContext()
                 val socket = sslContext.serverSocketFactory.createServerSocket(0) as SSLServerSocket
+                // The Android Keystore RSA key is currently configured for PKCS#1 signatures.
+                // TLS 1.3 requires RSA-PSS for RSA certificate signatures, which can make the
+                // handshake fail before the desktop client can read /v1/status. TLS 1.2 supports
+                // the configured key and still provides authenticated, encrypted transport.
                 socket.enabledProtocols = socket.supportedProtocols.filter {
-                    it == "TLSv1.3" || it == "TLSv1.2"
+                    it == "TLSv1.2"
                 }.toTypedArray()
                 synchronized(this) {
                     if (!running) {
