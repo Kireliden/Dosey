@@ -10,5 +10,9 @@ data class MedicationEntity(
     val name: String,
     val doseDescription: String = "",
     val notes: String = "",
+    // -1 means stock tracking is disabled for this medication.
+    val stockQuantity: Int = -1,
+    val lowStockThreshold: Int = 5,
+    val unitsPerDose: Int = 1,
     val createdAt: Long = System.currentTimeMillis()
 )
