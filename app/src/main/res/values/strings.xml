@@ -98,6 +98,8 @@
     <string name="companion_notification_message">Encrypted local status endpoint starting.</string>
     <string name="companion_listener_running">Encrypted status endpoint active · pairing required</string>
     <string name="companion_listener_error">Companion could not start: %1$s</string>
+    <string name="companion_certificate_fingerprint_title">TLS certificate SHA-256 fingerprint</string>
+    <string name="companion_certificate_fingerprint_help">Compare this fingerprint with the certificate fingerprint shown by the PC before trusting the connection. Never approve a pairing request if the values do not match.</string>
     <string name="companion_pair_request_title">Pairing request</string>
     <string name="companion_pair_request_client">Requesting device: %1$s</string>
     <string name="companion_pair_request_code_help">Only approve if this code exactly matches the code shown on the PC you are pairing. Approval does not yet grant access to medication data.</string>
