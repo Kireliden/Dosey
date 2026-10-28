@@ -73,7 +73,8 @@ class MainActivity : ComponentActivity() {
             MedicationRepository(
                 DoseyDatabase.getInstance(applicationContext).medicationDao(),
                 DoseyDatabase.getInstance(applicationContext).doseScheduleDao(),
-                DoseyDatabase.getInstance(applicationContext).doseLogDao()
+                DoseyDatabase.getInstance(applicationContext).doseLogDao(),
+                DoseyDatabase.getInstance(applicationContext).oneOffDoseDao()
             )
         )
     }
@@ -96,6 +97,8 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     val medications by viewModel.medications.collectAsStateWithLifecycle()
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
     val doseLogs by viewModel.doseLogs.collectAsStateWithLifecycle()
+    val oneOffDoses by viewModel.oneOffDoses.collectAsStateWithLifecycle()
+    val oneOffSuggestions by viewModel.oneOffSuggestions.collectAsStateWithLifecycle()
     var showMedicationDialog by remember { mutableStateOf(false) }
     var showOneOffDialog by remember { mutableStateOf(false) }
     var medicationBeingEdited by remember { mutableStateOf<MedicationEntity?>(null) }
@@ -341,13 +344,14 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                 modifier = Modifier.padding(18.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (doseLogs.isEmpty()) {
+                                if (doseLogs.isEmpty() && oneOffDoses.isEmpty()) {
                                     Text(
                                         text = stringResource(R.string.no_dose_history),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 } else {
                                     doseLogs.forEach { log -> DoseHistoryRow(log) }
+                                    oneOffDoses.forEach { log -> OneOffDoseHistoryRow(log) }
                                 }
                             }
                         }
@@ -360,11 +364,11 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
 
     if (showOneOffDialog) {
         OneOffDoseDialog(
-            medications = medications,
+            suggestions = oneOffSuggestions,
             onDismiss = { showOneOffDialog = false },
-            onSelect = { medication ->
+            onSave = { name, dose ->
                 val now = java.time.LocalTime.now()
-                viewModel.markDoseTaken(medication, todayDate, now.hour * 60 + now.minute)
+                viewModel.recordOneOffDose(name, dose, todayDate, now.hour * 60 + now.minute)
                 showOneOffDialog = false
             }
         )
@@ -454,41 +458,99 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
 
 @Composable
 private fun OneOffDoseDialog(
-    medications: List<MedicationEntity>,
+    suggestions: List<com.borealis.dosey.data.local.OneOffDoseEntity>,
     onDismiss: () -> Unit,
-    onSelect: (MedicationEntity) -> Unit
+    onSave: (String, String) -> Unit
 ) {
+    var name by remember { mutableStateOf("") }
+    var dose by remember { mutableStateOf("") }
+    var selectedSuggestion by remember { mutableStateOf<String?>(null) }
+    var validationError by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.one_off_dose_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (medications.isEmpty()) {
-                    Text(stringResource(R.string.one_off_no_medications))
-                } else {
-                    medications.forEach { medication ->
+                if (suggestions.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.one_off_recent_suggestions),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    suggestions.forEach { suggestion ->
                         TextButton(
-                            onClick = { onSelect(medication) },
+                            onClick = {
+                                selectedSuggestion = suggestion.medicationName
+                                name = suggestion.medicationName
+                                dose = suggestion.doseDescription
+                                validationError = false
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(medication.name, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    medication.doseDescription.ifBlank { stringResource(R.string.dose_not_configured) },
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Text(suggestion.medicationName, fontWeight = FontWeight.SemiBold)
+                                if (suggestion.doseDescription.isNotBlank()) {
+                                    Text(
+                                        suggestion.doseDescription,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
+                    Text(
+                        text = stringResource(R.string.one_off_or_new),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it; selectedSuggestion = null; validationError = false },
+                    label = { Text(stringResource(R.string.one_off_medication_name)) },
+                    singleLine = true,
+                    isError = validationError
+                )
+                OutlinedTextField(
+                    value = dose,
+                    onValueChange = { dose = it },
+                    label = { Text(stringResource(R.string.one_off_dose_label)) },
+                    placeholder = { Text("e.g. 400 mg, 1 tablet") },
+                    singleLine = true
+                )
+                if (validationError) {
+                    Text(
+                        text = stringResource(R.string.one_off_name_required),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         },
         confirmButton = {
+            TextButton(onClick = {
+                if (name.isBlank()) validationError = true
+                else onSave(name.trim(), dose.trim())
+            }) {
+                Text(stringResource(R.string.record_dose))
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
+    )
+}
+
+@Composable
+private fun OneOffDoseHistoryRow(log: com.borealis.dosey.data.local.OneOffDoseEntity) {
+    val time = String.format(Locale.ROOT, "%02d:%02d", log.minutesAfterMidnight / 60, log.minutesAfterMidnight % 60)
+    val description = if (log.doseDescription.isBlank()) log.medicationName else "${log.medicationName} · ${log.doseDescription}"
+    Text(
+        text = stringResource(R.string.one_off_history_entry, log.scheduledDate, time, description),
+        style = MaterialTheme.typography.bodyMedium
     )
 }
 
