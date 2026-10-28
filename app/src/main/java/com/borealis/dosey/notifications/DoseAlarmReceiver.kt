@@ -30,15 +30,23 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             val status = if (action == ACTION_TAKEN) STATUS_TAKEN else STATUS_MISSED
             CoroutineScope(Dispatchers.IO).launch {
                 val db = DoseyDatabase.getInstance(context)
+                val today = LocalDate.now().toString()
+                val previousLog = db.doseLogDao().find(medicationId, today, minutes)
                 db.doseLogDao().upsert(
                     com.borealis.dosey.data.local.DoseLogEntity(
                         medicationId = medicationId,
                         medicationName = medicationName,
-                        scheduledDate = LocalDate.now().toString(),
+                        scheduledDate = today,
                         minutesAfterMidnight = minutes,
                         status = status
                     )
                 )
+                if (action == ACTION_TAKEN && previousLog?.status != STATUS_TAKEN) {
+                    val medication = db.medicationDao().findById(medicationId)
+                    if (medication != null && medication.stockQuantity >= 0) {
+                        db.medicationDao().deductStock(medicationId, medication.unitsPerDose)
+                    }
+                }
             }
             NotificationManagerCompat.from(context).cancel(notificationId(medicationId, minutes))
             return
