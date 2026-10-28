@@ -82,27 +82,30 @@ abstract class DoseyDatabase : RoomDatabase() {
                         PRIMARY KEY(id)
                     )
                 """.trimIndent())
-                db.execSQL("INSERT OR IGNORE INTO companion_sync_metadata (id, revision) VALUES (1, 1)")
+                installCompanionRevisionTracking(db)
+            }
+        }
 
-                val tables = listOf(
-                    "medications",
-                    "dose_schedules",
-                    "dose_logs",
-                    "one_off_dose_logs"
-                )
-                tables.forEach { table ->
-                    listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
-                        val trigger = "companion_revision_${table}_${operation.lowercase()}"
-                        db.execSQL("""
-                            CREATE TRIGGER IF NOT EXISTS $trigger
-                            AFTER $operation ON $table
-                            BEGIN
-                                UPDATE companion_sync_metadata
-                                SET revision = revision + 1
-                                WHERE id = 1;
-                            END
-                        """.trimIndent())
-                    }
+        private fun installCompanionRevisionTracking(db: SupportSQLiteDatabase) {
+            db.execSQL("INSERT OR IGNORE INTO companion_sync_metadata (id, revision) VALUES (1, 1)")
+            val tables = listOf(
+                "medications",
+                "dose_schedules",
+                "dose_logs",
+                "one_off_dose_logs"
+            )
+            tables.forEach { table ->
+                listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
+                    val trigger = "companion_revision_${table}_${operation.lowercase()}"
+                    db.execSQL("""
+                        CREATE TRIGGER IF NOT EXISTS $trigger
+                        AFTER $operation ON $table
+                        BEGIN
+                            UPDATE companion_sync_metadata
+                            SET revision = revision + 1
+                            WHERE id = 1;
+                        END
+                    """.trimIndent())
                 }
             }
         }
@@ -116,7 +119,14 @@ abstract class DoseyDatabase : RoomDatabase() {
                     context.applicationContext,
                     DoseyDatabase::class.java,
                     "dosey.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            super.onCreate(db)
+                            installCompanionRevisionTracking(db)
+                        }
+                    })
+                    .build().also { instance = it }
             }
     }
 }
