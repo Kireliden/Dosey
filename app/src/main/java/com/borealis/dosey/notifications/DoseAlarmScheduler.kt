@@ -11,21 +11,41 @@ import java.time.ZoneId
 
 class DoseAlarmScheduler(private val context: Context) {
     fun schedule(medication: MedicationEntity, schedule: DoseScheduleEntity) {
+        scheduleNextOccurrence(
+            medication.id,
+            medication.name,
+            schedule.minutesAfterMidnight,
+            includeToday = true
+        )
+    }
+
+    /**
+     * Uses a one-shot alarm instead of setInexactRepeating. Android can defer
+     * repeating inexact alarms substantially, which makes minute-level testing
+     * and medication reminders unreliable. The receiver schedules the next day
+     * after delivering each reminder.
+     */
+    fun scheduleNextOccurrence(
+        medicationId: Long,
+        medicationName: String,
+        minutes: Int,
+        includeToday: Boolean
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = reminderIntent(medication, schedule)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            DoseAlarmReceiver.notificationId(medication.id, schedule.minutesAfterMidnight),
-            intent,
+            DoseAlarmReceiver.notificationId(medicationId, minutes),
+            reminderIntent(medicationId, medicationName, minutes),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
         val now = LocalDateTime.now()
-        var next = now.toLocalDate().atStartOfDay().plusMinutes(schedule.minutesAfterMidnight.toLong())
-        if (!next.isAfter(now)) next = next.plusDays(1)
-        alarmManager.setInexactRepeating(
+        var next = now.toLocalDate().atStartOfDay().plusMinutes(minutes.toLong())
+        if (!includeToday || !next.isAfter(now)) next = next.plusDays(1)
+
+        alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-            AlarmManager.INTERVAL_DAY,
             pendingIntent
         )
     }
@@ -46,11 +66,11 @@ class DoseAlarmScheduler(private val context: Context) {
         pendingIntent.cancel()
     }
 
-    private fun reminderIntent(medication: MedicationEntity, schedule: DoseScheduleEntity) =
+    private fun reminderIntent(medicationId: Long, medicationName: String, minutes: Int) =
         Intent(context, DoseAlarmReceiver::class.java).apply {
             action = DoseAlarmReceiver.ACTION_REMIND
-            putExtra(DoseAlarmReceiver.EXTRA_MEDICATION_ID, medication.id)
-            putExtra(DoseAlarmReceiver.EXTRA_MEDICATION_NAME, medication.name)
-            putExtra(DoseAlarmReceiver.EXTRA_MINUTES, schedule.minutesAfterMidnight)
+            putExtra(DoseAlarmReceiver.EXTRA_MEDICATION_ID, medicationId)
+            putExtra(DoseAlarmReceiver.EXTRA_MEDICATION_NAME, medicationName)
+            putExtra(DoseAlarmReceiver.EXTRA_MINUTES, minutes)
         }
 }
