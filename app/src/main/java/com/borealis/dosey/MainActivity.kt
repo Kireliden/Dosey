@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,12 +41,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borealis.dosey.companion.CompanionService
@@ -264,160 +267,200 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
 
                 when (selectedScreen) {
                     "companion" -> {
-                        Text(
-                            text = stringResource(R.string.companion_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(520.dp)
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .blur(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
                             ) {
-                                Text(
-                                    text = stringResource(
-                                        if (companionEnabled) R.string.companion_enabled_title
-                                        else R.string.companion_disabled_title
-                                    ),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = stringResource(
-                                        if (companionEnabled) R.string.companion_enabled_detail
-                                        else R.string.companion_disabled_detail
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (companionEnabled && companionFingerprint != null) {
-                                    androidx.compose.material3.HorizontalDivider()
-                                    Text(
-                                        text = "Secure QR pairing verifies this phone's certificate automatically. You do not need to copy the fingerprint.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Button(
-                                    onClick = {
-                                        val action = if (companionEnabled) CompanionService.ACTION_STOP
-                                            else CompanionService.ACTION_START
-                                        val serviceIntent = Intent(context, CompanionService::class.java).setAction(action)
-                                        if (companionEnabled) context.startService(serviceIntent)
-                                        else androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
-                                        companionEnabled = !companionEnabled
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
+                            Text(
+                                text = stringResource(R.string.companion_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    Text(stringResource(
-                                        if (companionEnabled) R.string.companion_disable
-                                        else R.string.companion_enable
-                                    ))
-                                }
-                                if (companionEnabled && pendingPairingRequest != null) {
-                                    val request = pendingPairingRequest!!
-                                    androidx.compose.material3.HorizontalDivider()
                                     Text(
-                                        text = stringResource(R.string.companion_pair_request_title),
+                                        text = stringResource(
+                                            if (companionEnabled) R.string.companion_enabled_title
+                                            else R.string.companion_disabled_title
+                                        ),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Text(stringResource(R.string.companion_pair_request_client, request.clientName))
                                     Text(
-                                        text = request.verificationCode,
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        text = stringResource(
+                                            if (companionEnabled) R.string.companion_enabled_detail
+                                            else R.string.companion_disabled_detail
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium
                                     )
-                                    Text(stringResource(R.string.companion_pair_request_code_help))
-                                    Button(
-                                        onClick = {
-                                            val activity = context as? Activity
-                                            if (activity == null) {
-                                                Toast.makeText(context, "Unable to open QR scanner", Toast.LENGTH_LONG).show()
-                                            } else {
-                                                val scanIntent = IntentIntegrator(activity).apply {
-                                                    setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                                                    setPrompt("Scan the QR code shown by Dosey Companion on your PC")
-                                                    setBeepEnabled(false)
-                                                    setOrientationLocked(false)
-                                                }.createScanIntent()
-                                                qrScanner.launch(scanIntent)
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) { Text("Scan PC pairing QR") }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        TextButton(
-                                            onClick = { CompanionPairingManager.reject(request.id) },
-                                            modifier = Modifier.weight(1f)
-                                        ) { Text(stringResource(R.string.companion_pair_reject)) }
-                                        Button(
-                                            onClick = { CompanionPairingManager.approve(request.id) },
-                                            modifier = Modifier.weight(1f)
-                                        ) { Text(stringResource(R.string.companion_pair_approve)) }
-                                    }
-                                }
-                                if (companionEnabled) {
-                                    androidx.compose.material3.HorizontalDivider()
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text("Paired computers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        TextButton(onClick = {
-                                            companionClients = runCatching {
-                                                CompanionCredentialStore.list(context)
-                                            }.getOrDefault(emptyList())
-                                        }) { Text("Refresh") }
-                                    }
-                                    if (companionClients.isEmpty()) {
+                                    if (companionEnabled && companionFingerprint != null) {
+                                        androidx.compose.material3.HorizontalDivider()
                                         Text(
-                                            "No paired computers yet.",
+                                            text = "Secure QR pairing verifies this phone's certificate automatically. You do not need to copy the fingerprint.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                    } else {
-                                        companionClients.forEach { client ->
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(client.name, style = MaterialTheme.typography.bodyLarge)
-                                                    Text(
-                                                        if (client.revokedAt == null) "Paired" else "Access revoked",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val action = if (companionEnabled) CompanionService.ACTION_STOP
+                                                else CompanionService.ACTION_START
+                                            val serviceIntent = Intent(context, CompanionService::class.java).setAction(action)
+                                            if (companionEnabled) context.startService(serviceIntent)
+                                            else androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
+                                            companionEnabled = !companionEnabled
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(
+                                            if (companionEnabled) R.string.companion_disable
+                                            else R.string.companion_enable
+                                        ))
+                                    }
+                                    if (companionEnabled && pendingPairingRequest != null) {
+                                        val request = pendingPairingRequest!!
+                                        androidx.compose.material3.HorizontalDivider()
+                                        Text(
+                                            text = stringResource(R.string.companion_pair_request_title),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(stringResource(R.string.companion_pair_request_client, request.clientName))
+                                        Text(
+                                            text = request.verificationCode,
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(stringResource(R.string.companion_pair_request_code_help))
+                                        Button(
+                                            onClick = {
+                                                val activity = context as? Activity
+                                                if (activity == null) {
+                                                    Toast.makeText(context, "Unable to open QR scanner", Toast.LENGTH_LONG).show()
+                                                } else {
+                                                    val scanIntent = IntentIntegrator(activity).apply {
+                                                        setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                                                        setPrompt("Scan the QR code shown by Dosey Companion on your PC")
+                                                        setBeepEnabled(false)
+                                                        setOrientationLocked(false)
+                                                    }.createScanIntent()
+                                                    qrScanner.launch(scanIntent)
                                                 }
-                                                if (client.revokedAt == null) {
-                                                    TextButton(onClick = {
-                                                        if (CompanionCredentialStore.revoke(context, client.id)) {
-                                                            companionClients = runCatching {
-                                                                CompanionCredentialStore.list(context)
-                                                            }.getOrDefault(emptyList())
-                                                        }
-                                                    }) { Text("Revoke") }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("Scan PC pairing QR") }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            TextButton(
+                                                onClick = { CompanionPairingManager.reject(request.id) },
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text(stringResource(R.string.companion_pair_reject)) }
+                                            Button(
+                                                onClick = { CompanionPairingManager.approve(request.id) },
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text(stringResource(R.string.companion_pair_approve)) }
+                                        }
+                                    }
+                                    if (companionEnabled) {
+                                        androidx.compose.material3.HorizontalDivider()
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Paired computers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            TextButton(onClick = {
+                                                companionClients = runCatching {
+                                                    CompanionCredentialStore.list(context)
+                                                }.getOrDefault(emptyList())
+                                            }) { Text("Refresh") }
+                                        }
+                                        if (companionClients.isEmpty()) {
+                                            Text(
+                                                "No paired computers yet.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        } else {
+                                            companionClients.forEach { client ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(client.name, style = MaterialTheme.typography.bodyLarge)
+                                                        Text(
+                                                            if (client.revokedAt == null) "Paired" else "Access revoked",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    if (client.revokedAt == null) {
+                                                        TextButton(onClick = {
+                                                            if (CompanionCredentialStore.revoke(context, client.id)) {
+                                                                companionClients = runCatching {
+                                                                    CompanionCredentialStore.list(context)
+                                                                }.getOrDefault(emptyList())
+                                                            }
+                                                        }) { Text("Revoke") }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            Text(
+                                text = stringResource(R.string.companion_description),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.58f))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {}
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Card(
+                                    shape = RoundedCornerShape(28.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                ) {
+                                    Text(
+                                        text = "Comming soon",
+                                        modifier = Modifier.padding(horizontal = 30.dp, vertical = 20.dp),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
-                        Text(
-                            text = stringResource(R.string.companion_description),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
                     }
                     "today" -> {
                         Text(
