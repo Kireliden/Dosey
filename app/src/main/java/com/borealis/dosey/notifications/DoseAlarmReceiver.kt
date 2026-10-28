@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -65,22 +67,39 @@ class DoseAlarmReceiver : BroadcastReceiver() {
 
         val isSnoozedReminder = intent.getBooleanExtra(EXTRA_IS_SNOOZED_REMINDER, false)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val preferences = context.getSharedPreferences("dosey_preferences", Context.MODE_PRIVATE)
+        val customSoundUri = preferences.getString("notifications_sound_uri", null)?.let(Uri::parse)
+        val channelId = customSoundUri?.let { CHANNEL_ID + "_" + it.toString().hashCode() } ?: CHANNEL_ID
+        val persistent = preferences.getBoolean("notifications_persistent", false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, context.getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT)
+            val channel = NotificationChannel(
+                channelId,
+                context.getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT
             )
+            if (customSoundUri != null) {
+                channel.setSound(
+                    customSoundUri,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+            }
+            manager.createNotificationChannel(channel)
         }
         val openApp = PendingIntent.getActivity(
             context, notificationId(medicationId, minutes),
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(context.getString(R.string.dose_reminder_title))
             .setContentText(context.getString(R.string.dose_reminder_message, medicationName, formatTime(minutes)))
             .setContentIntent(openApp)
-            .setAutoCancel(true)
+            .setAutoCancel(!persistent)
+            .setOngoing(persistent)
             .addAction(0, context.getString(R.string.mark_taken), actionIntent(context, ACTION_TAKEN, medicationId, medicationName, minutes))
             .addAction(0, context.getString(R.string.mark_missed), actionIntent(context, ACTION_MISSED, medicationId, medicationName, minutes))
             .addAction(0, context.getString(R.string.snooze_reminder), actionIntent(context, ACTION_SNOOZE, medicationId, medicationName, minutes))
