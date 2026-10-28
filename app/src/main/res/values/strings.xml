@@ -30,6 +30,15 @@
     <string name="mark_taken">Taken</string>
     <string name="mark_missed">Missed</string>
     <string name="snooze_reminder">Snooze 10 min</string>
+    <string name="inventory_section">Stock and refills</string>
+    <string name="inventory_instructions">Leave current stock empty to disable stock tracking. When you mark a dose as taken, Dosey deducts the configured number of units.</string>
+    <string name="stock_quantity_label">Current stock (units)</string>
+    <string name="stock_untracked_hint">Not tracking stock</string>
+    <string name="low_stock_threshold_label">Low-stock alert at</string>
+    <string name="units_per_dose_label">Units used per dose</string>
+    <string name="stock_quantity">Stock: %1$d units</string>
+    <string name="low_stock_warning">Low stock · consider a refill</string>
+    <string name="invalid_inventory_values">Enter a valid stock quantity, threshold and units per dose.</string>
     <string name="dose_history">Dose history</string>
     <string name="no_dose_history">Your recorded doses will appear here.</string>
     <string name="history_entry">%1$s · %2$s · %3$s</string>
