@@ -276,8 +276,14 @@ internal class CompanionNetworkServer(
                 val issuedCredential = if (confirmedPairing != null) try {
                     CompanionCredentialStore.issue(context, confirmedPairing.clientName)
                 } catch (_: Exception) { null } else null
-                val bearerToken = authorizationHeader?.takeIf { it.startsWith("Bearer ") }
-                    ?.removePrefix("Bearer ")?.takeIf { CompanionCredentialStore.isAuthenticated(context, it) }
+                val candidateToken = authorizationHeader?.takeIf { it.startsWith("Bearer ") }
+                    ?.removePrefix("Bearer ")
+                val authenticatedToken = candidateToken?.takeIf {
+                    CompanionCredentialStore.isAuthenticated(context, it)
+                }
+                val rateLimited = authenticatedToken != null &&
+                    !CompanionRequestRateLimiter.allow(authenticatedToken, isCommandRequest)
+                val bearerToken = authenticatedToken.takeUnless { rateLimited }
                 val isSnapshotRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/snapshot" && parts[2] == "HTTP/1.1"
                 val isChangesRequest = headersSafe && requestLineValid &&
@@ -328,6 +334,8 @@ internal class CompanionNetworkServer(
                     isPairConfirm -> JSONObject().put("error",
                         if (!confirmInputValid) "invalid_pair_confirmation" else "pairing_not_approved_or_code_mismatch"
                     ).toString()
+                    (isSnapshotRequest || isChangesRequest || isCommandRequest) && rateLimited ->
+                        JSONObject().put("error", "rate_limited").toString()
                     (isSnapshotRequest || isChangesRequest) && bearerToken == null ->
                         JSONObject().put("error", "unauthorized").toString()
                     (isSnapshotRequest || isChangesRequest) && snapshotResponse != null -> snapshotResponse.toString()
@@ -356,6 +364,7 @@ internal class CompanionNetworkServer(
                         (isPairConfirm && issuedCredential != null) ||
                         ((isSnapshotRequest || isChangesRequest) && snapshotResponse != null) ||
                         (isCommandRequest && commandResponse?.optBoolean("accepted", false) == true) -> "200 OK"
+                    (isSnapshotRequest || isChangesRequest || isCommandRequest) && rateLimited -> "429 Too Many Requests"
                     (isSnapshotRequest || isChangesRequest || isCommandRequest) && bearerToken == null -> "401 Unauthorized"
                     isPairConfirm && !confirmInputValid -> "400 Bad Request"
                     isPairConfirm -> "409 Conflict"
