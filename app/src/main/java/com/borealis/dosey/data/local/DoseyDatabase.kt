@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class, OneOffDoseEntity::class],
-    version = 5,
+    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class, OneOffDoseEntity::class, CompanionSyncMetadataEntity::class],
+    version = 6,
     exportSchema = false
 )
 abstract class DoseyDatabase : RoomDatabase() {
@@ -17,6 +17,7 @@ abstract class DoseyDatabase : RoomDatabase() {
     abstract fun doseScheduleDao(): DoseScheduleDao
     abstract fun doseLogDao(): DoseLogDao
     abstract fun oneOffDoseDao(): OneOffDoseDao
+    abstract fun companionSyncMetadataDao(): CompanionSyncMetadataDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -72,6 +73,40 @@ abstract class DoseyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS companion_sync_metadata (
+                        id INTEGER NOT NULL,
+                        revision INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(id)
+                    )
+                """.trimIndent())
+                db.execSQL("INSERT OR IGNORE INTO companion_sync_metadata (id, revision) VALUES (1, 1)")
+
+                val tables = listOf(
+                    "medications",
+                    "dose_schedules",
+                    "dose_logs",
+                    "one_off_dose_logs"
+                )
+                tables.forEach { table ->
+                    listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
+                        val trigger = "companion_revision_${table}_${operation.lowercase()}"
+                        db.execSQL("""
+                            CREATE TRIGGER IF NOT EXISTS $trigger
+                            AFTER $operation ON $table
+                            BEGIN
+                                UPDATE companion_sync_metadata
+                                SET revision = revision + 1
+                                WHERE id = 1;
+                            END
+                        """.trimIndent())
+                    }
+                }
+            }
+        }
+
         @Volatile
         private var instance: DoseyDatabase? = null
 
@@ -81,7 +116,7 @@ abstract class DoseyDatabase : RoomDatabase() {
                     context.applicationContext,
                     DoseyDatabase::class.java,
                     "dosey.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
             }
     }
 }
