@@ -55,3 +55,10 @@ The desktop client stores the last valid snapshot and the timestamp it was recei
 - Respect Android background restrictions and local-network permission requirements for the target SDK.
 - Stop discovery and close the listener immediately when Companion is disabled.
 - Do not run a listener at boot without explicit user opt-in.
+
+
+## Credential storage foundation
+
+Android now has an isolated storage component for future per-PC credentials. It generates 256-bit random bearer tokens, persists only SHA-256 token verifiers, and encrypts the client registry with AES-256-GCM using a key held by Android Keystore. The API supports listing client metadata, constant-time verifier comparison, and revoking a client. Raw tokens are returned only once by the issuance method.
+
+This component is intentionally **not wired to pairing approval or HTTP routes**. The current desktop client does not exist yet, so certificate-fingerprint comparison and pinning UX cannot be verified end-to-end. No credentials are issued by the running app, no authentication route exists, and no medication data is exposed. Corrupt or undecryptable stored state fails closed rather than being silently replaced. Revocation takes effect for future authentication checks once the eventual authenticated routes use this store.
