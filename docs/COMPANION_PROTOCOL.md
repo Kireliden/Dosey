@@ -28,14 +28,14 @@ Implemented request/approval foundation:
 4. The user checks that the code matches the PC and explicitly approves or rejects.
 5. The PC polls the request status. Requests expire after 120 seconds and are cleared when the service stops.
 
-Still required before a connection can access medical data:
+Before release:
 - The PC must compute the SHA-256 fingerprint from the certificate presented during the TLS handshake, display it, and let the user compare it with Android. The PC must pin that exact certificate before treating the connection as trusted; the fingerprint returned inside `/v1/status` is informational and must not itself be trusted before certificate pinning.
-- Only after the pinning UX is in place, issue a cryptographically random per-client credential after approval, store a verifier, authenticate each request, and provide per-client revocation and rate limiting.
-- No credential or medical-data endpoint is implemented by this milestone.
+- Validate pairing, credential issuance, snapshot transfer, writes, and revocation end-to-end with the actual desktop client. The Android host cannot independently verify that a remote client has correctly pinned the certificate.
+- Per-client revocation is available in Android's Paired computers list. Authenticated requests are bounded by server concurrency limits; add/verify per-client rate limiting as part of end-to-end hardening.
 
 ## API shape
 
-- GET /v1/status: protocol version, app version, snapshot revision, and server time. No medical details.
+- GET /v1/status: protocol version, generic service label, pairing state, TLS certificate fingerprint, and server time. No medical details.
 - POST /v1/pair/request: starts a pairing request.
 - POST /v1/pair/confirm: confirms the approved short-lived code and returns the client credential once.
 - GET /v1/snapshot: returns a consistent, versioned snapshot of medications, schedules, dose logs and one-off dose logs. Requires `Authorization: Bearer <credential>`.
@@ -44,7 +44,7 @@ Still required before a connection can access medical data:
   - `record_one_off`: `commandId`, `type`, `medicationName`, `doseDescription`, `scheduledDate` (YYYY-MM-DD), `minutesAfterMidnight` (0–1439).
 - GET /v1/changes?after=<revision>: currently returns a full snapshot, with `resetRequired` indicating whether the requested revision differs from the current revision. Partial change-feed optimisation is deferred until the desktop client exists.
 
-All authenticated responses include a monotonically increasing snapshot revision. Writes must include an idempotency key so retrying after a dropped response cannot record the same dose twice.
+Successful snapshot responses and successful write-command responses include the monotonically increasing snapshot revision. Writes must include an idempotency key so retrying after a dropped response cannot record the same dose twice.
 
 ## Offline desktop behavior
 
