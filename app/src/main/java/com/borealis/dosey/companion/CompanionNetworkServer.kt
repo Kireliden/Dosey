@@ -135,26 +135,49 @@ internal class CompanionNetworkServer(
                 client.startHandshake()
                 val reader = BufferedReader(InputStreamReader(client.inputStream, Charsets.US_ASCII))
                 val requestLine = reader.readLine() ?: return
-                var bytes = requestLine.length
-                while (bytes < 8192) {
-                    val line = reader.readLine() ?: break
-                    bytes += line.length
+                var headerBytes = 0
+                var headerCount = 0
+                var headersValid = requestLine.length <= MAX_REQUEST_LINE_BYTES
+                while (headersValid) {
+                    val line = reader.readLine()
+                    if (line == null) {
+                        headersValid = false
+                        break
+                    }
+                    headerBytes += line.length + 2
+                    headerCount++
+                    if (headerBytes > MAX_HEADER_BYTES || headerCount > MAX_HEADER_COUNT) {
+                        headersValid = false
+                        break
+                    }
                     if (line.isEmpty()) break
+                    if (':' !in line) {
+                        headersValid = false
+                        break
+                    }
                 }
                 val parts = requestLine.split(" ")
-                val isStatusRequest = parts.size >= 2 && parts[0] == "GET" && parts[1] == "/v1/status"
-                val body = if (isStatusRequest) {
-                    JSONObject()
+                val isStatusRequest = headersValid &&
+                    parts.size == 3 && parts[0] == "GET" &&
+                    parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
+                val body = when {
+                    !headersValid -> JSONObject().put("error", "bad_request").toString()
+                    isStatusRequest -> JSONObject()
                         .put("service", "Dosey Companion")
                         .put("protocolVersion", 1)
                         .put("status", "pairing_required")
                         .put("medicationDataAvailable", false)
                         .put("serverTime", System.currentTimeMillis())
                         .toString()
-                } else JSONObject().put("error", "not_found").toString()
-                val status = if (isStatusRequest) "200 OK" else "404 Not Found"
+                    else -> JSONObject().put("error", "not_found").toString()
+                }
+                val status = when {
+                    !headersValid -> "400 Bad Request"
+                    isStatusRequest -> "200 OK"
+                    else -> "404 Not Found"
+                }
                 val payload = body.toByteArray(Charsets.UTF_8)
-                val response = "HTTP/1.1 $status\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${payload.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
+                val response = "HTTP/1.1 $status\\r\\nContent-Type: application/json; charset=utf-8\\r\\nContent-Length: ${payload.size}\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\n\\r\\n"
                 val output = client.outputStream
                 output.write(response.toByteArray(Charsets.US_ASCII))
                 output.write(payload)
@@ -211,5 +234,8 @@ internal class CompanionNetworkServer(
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "dosey_companion_tls"
         private const val CERT_VALIDITY_MS = 10L * 365 * 24 * 60 * 60 * 1000
+        private const val MAX_REQUEST_LINE_BYTES = 2048
+        private const val MAX_HEADER_BYTES = 8192
+        private const val MAX_HEADER_COUNT = 64
     }
 }
