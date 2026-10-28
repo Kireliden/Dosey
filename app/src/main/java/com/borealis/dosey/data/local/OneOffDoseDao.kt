@@ -10,7 +10,7 @@ interface OneOffDoseDao {
     @Query("SELECT * FROM one_off_dose_logs ORDER BY scheduledDate DESC, minutesAfterMidnight DESC")
     fun observeAll(): Flow<List<OneOffDoseEntity>>
 
-    @Query("SELECT * FROM one_off_dose_logs GROUP BY medicationName COLLATE NOCASE ORDER BY MAX(recordedAt) DESC")
+    @Query("SELECT * FROM one_off_dose_logs WHERE id IN (SELECT MAX(id) FROM one_off_dose_logs GROUP BY medicationName COLLATE NOCASE) ORDER BY recordedAt DESC")
     fun observeSuggestions(): Flow<List<OneOffDoseEntity>>
 
     @Insert
