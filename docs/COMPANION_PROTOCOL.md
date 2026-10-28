@@ -10,6 +10,12 @@ This document is the implementation contract for the Android host and future des
 - The service must bind to the local network interface and be reachable only from the local network.
 - Discovery broadcasts only a random instance identifier and port, never user, medication, or device-owner names.
 
+## Current bootstrap implementation
+
+- `GET /v1/status` is available over TLS and returns protocol version, a generic service label, `pairing_required`, `medicationDataAvailable: false`, and server time.
+- The Android host generates a persistent self-signed RSA certificate in Android Keystore and advertises `_dosey._tcp.` only while Companion is enabled.
+- No medication data, pairing credentials, or write endpoints are available yet. A client must not treat service discovery or the status response as proof of identity; certificate pinning and explicit pairing are still required.
+
 ## Pairing
 
 1. User enables Companion on Android.
