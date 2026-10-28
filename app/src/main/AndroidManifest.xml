@@ -18,6 +18,15 @@
             android:name=".notifications.DoseAlarmReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".notifications.DoseBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
