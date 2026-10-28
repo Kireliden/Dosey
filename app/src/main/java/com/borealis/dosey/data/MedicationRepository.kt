@@ -1,11 +1,14 @@
 package com.borealis.dosey.data
 
+import com.borealis.dosey.data.local.DoseScheduleDao
+import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.MedicationDao
 import com.borealis.dosey.data.local.MedicationEntity
 import kotlinx.coroutines.flow.Flow
 
 class MedicationRepository(
-    private val medicationDao: MedicationDao
+    private val medicationDao: MedicationDao,
+    private val doseScheduleDao: DoseScheduleDao
 ) {
     fun observeMedications(): Flow<List<MedicationEntity>> =
         medicationDao.observeAll()
@@ -33,6 +36,22 @@ class MedicationRepository(
                 notes = notes.trim()
             )
         )
+    }
+
+    fun observeSchedules(): Flow<List<DoseScheduleEntity>> =
+        doseScheduleDao.observeAll()
+
+    suspend fun addSchedule(medicationId: Long, minutesAfterMidnight: Int) {
+        doseScheduleDao.insert(
+            DoseScheduleEntity(
+                medicationId = medicationId,
+                minutesAfterMidnight = minutesAfterMidnight
+            )
+        )
+    }
+
+    suspend fun deleteSchedule(schedule: DoseScheduleEntity) {
+        doseScheduleDao.delete(schedule)
     }
 
     suspend fun deleteMedication(medication: MedicationEntity) {
