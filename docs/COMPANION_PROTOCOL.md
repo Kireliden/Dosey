@@ -31,7 +31,7 @@ Implemented request/approval foundation:
 Before release:
 - The PC must compute the SHA-256 fingerprint from the certificate presented during the TLS handshake, display it, and let the user compare it with Android. The PC must pin that exact certificate before treating the connection as trusted; the fingerprint returned inside `/v1/status` is informational and must not itself be trusted before certificate pinning.
 - Validate pairing, credential issuance, snapshot transfer, writes, and revocation end-to-end with the actual desktop client. The Android host cannot independently verify that a remote client has correctly pinned the certificate.
-- Per-client revocation is available in Android's Paired computers list. Authenticated requests are bounded by server concurrency limits; add/verify per-client rate limiting as part of end-to-end hardening.
+- Per-client revocation is available in Android's Paired computers list. Authenticated requests are bounded by server concurrency limits; per-client limits are currently 120 authenticated reads/minute and 30 write commands/minute; validate these limits against the desktop client's refresh behaviour.
 
 ## API shape
 
