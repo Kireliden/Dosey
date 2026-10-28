@@ -30,7 +30,15 @@ internal class CompanionNetworkServer(
     private val context: Context,
     private val onStateChanged: (Boolean, String?) -> Unit
 ) {
-    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.\n    private val executor = ThreadPoolExecutor(\n        2,\n        4,\n        30L,\n        TimeUnit.SECONDS,\n        ArrayBlockingQueue(16),\n        ThreadPoolExecutor.AbortPolicy()\n    )
+    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.\n    // Bound concurrent clients and queued work so LAN clients cannot create unbounded threads.
+    private val executor = ThreadPoolExecutor(
+        2,
+        4,
+        30L,
+        TimeUnit.SECONDS,
+        ArrayBlockingQueue(16),
+        ThreadPoolExecutor.AbortPolicy()
+    )
     private var serverSocket: SSLServerSocket? = null
     private var nsdManager: NsdManager? = null
     private var registered = false
