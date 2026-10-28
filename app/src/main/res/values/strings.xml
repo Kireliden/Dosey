@@ -29,6 +29,7 @@
     <string name="dose_reminder_message">%1$s · scheduled for %2$s</string>
     <string name="mark_taken">Taken</string>
     <string name="mark_missed">Missed</string>
+    <string name="snooze_reminder">Snooze 10 min</string>
     <string name="dose_history">Dose history</string>
     <string name="no_dose_history">Your recorded doses will appear here.</string>
     <string name="history_entry">%1$s · %2$s · %3$s</string>
