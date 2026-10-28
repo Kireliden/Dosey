@@ -98,4 +98,9 @@
     <string name="companion_notification_message">Encrypted local status endpoint starting.</string>
     <string name="companion_listener_running">Encrypted status endpoint active · pairing required</string>
     <string name="companion_listener_error">Companion could not start: %1$s</string>
+    <string name="companion_pair_request_title">Pairing request</string>
+    <string name="companion_pair_request_client">Requesting device: %1$s</string>
+    <string name="companion_pair_request_code_help">Only approve if this code exactly matches the code shown on the PC you are pairing. Approval does not yet grant access to medication data.</string>
+    <string name="companion_pair_approve">Approve</string>
+    <string name="companion_pair_reject">Reject</string>
 </resources>
