@@ -12,6 +12,15 @@
     <string name="add_medication">Add medication</string>
     <string name="edit_medication">Edit medication</string>
     <string name="upcoming_doses">Upcoming doses</string>
+    <string name="nav_today">Today</string>
+    <string name="nav_medications">Medications</string>
+    <string name="nav_history">History</string>
+    <string name="today_doses_title">Today’s doses</string>
+    <string name="all_done_today">All done for today!</string>
+    <string name="all_done_today_detail">You have no scheduled doses left to check off.</string>
+    <string name="add_one_off_dose">Add a one-off dose</string>
+    <string name="one_off_dose_title">Record a one-off dose</string>
+    <string name="one_off_no_medications">Add a medication first, then you can record a dose.</string>
     <string name="upcoming_doses_empty">Once you add your treatments, you can see your upcoming doses here.</string>
     <string name="no_schedules_yet">No schedules configured yet. Add a time to see it here.</string>
     <string name="manage_schedule">Schedule</string>
