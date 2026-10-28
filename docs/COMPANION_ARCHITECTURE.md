@@ -59,3 +59,9 @@ The desktop client is intentionally out of scope for the Android-only foundation
 - Added an isolated Android Keystore-backed credential registry: AES-256-GCM encrypted persistence, 256-bit random per-client bearer tokens, SHA-256 token verifiers only at rest, constant-time verifier comparisons, client metadata listing, and revocation timestamps.
 - The store is intentionally not connected to pairing approval or network routes yet. The desktop certificate-pinning flow must be implemented and tested before any credential is issued. No credential or medication data endpoint is exposed by this milestone.
 - Storage corruption/decryption failure must fail closed; never recreate an empty registry over unreadable existing state.
+
+
+### Snapshot preparation foundation
+
+- Added suspend DAO queries and an internal exporter that captures medications, schedules, scheduled-dose logs, and one-off logs within a single Room transaction. Its JSON representation includes protocol version and generation timestamp.
+- This is not an HTTP endpoint and cannot be called by a LAN client. Authenticated identity and certificate-pinned pairing must be in place before exposing any snapshot. A durable monotonic revision is still needed before implementing incremental sync or stale-snapshot detection.
