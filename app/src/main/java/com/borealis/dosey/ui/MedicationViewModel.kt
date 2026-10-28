@@ -7,6 +7,7 @@ import com.borealis.dosey.data.MedicationRepository
 import com.borealis.dosey.data.local.DoseLogEntity
 import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.MedicationEntity
+import com.borealis.dosey.data.local.OneOffDoseEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -14,6 +15,18 @@ import kotlinx.coroutines.launch
 class MedicationViewModel(
     private val repository: MedicationRepository
 ) : ViewModel() {
+    val oneOffDoses = repository.observeOneOffDoses().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
+    val oneOffSuggestions = repository.observeOneOffSuggestions().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
     val doseLogs = repository.observeDoseLogs().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -63,6 +76,13 @@ class MedicationViewModel(
     fun markDoseTaken(medication: MedicationEntity, date: String, minutes: Int) {
         viewModelScope.launch {
             repository.markDoseTaken(medication, date, minutes)
+        }
+    }
+
+    fun recordOneOffDose(name: String, dose: String, date: String, minutes: Int) {
+        if (name.isBlank() || minutes !in 0..1439) return
+        viewModelScope.launch {
+            repository.recordOneOffDose(name, dose, date, minutes)
         }
     }
 
