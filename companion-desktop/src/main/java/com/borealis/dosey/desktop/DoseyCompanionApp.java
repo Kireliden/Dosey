@@ -2,11 +2,15 @@ package com.borealis.dosey.desktop;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import javax.net.ssl.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
 import javax.net.ssl.HttpsURLConnection;
@@ -188,16 +192,45 @@ public final class DoseyCompanionApp {
                 SwingUtilities.invokeLater(() -> {
                     setBusy(false, null);
                     append("Pairing code: " + code + "\nApprove this exact request in Dosey on Android.\n");
-                    int choice = JOptionPane.showConfirmDialog(frame,
-                        "Compare code " + code + " with the request shown on Android.\nOnly continue if they match and you approved this PC.",
-                        "Confirm pairing code", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
-                    if (choice == JOptionPane.OK_OPTION) pollPairing();
-                    else append("Pairing confirmation cancelled.\n");
+                    showPairingQr(url, id, code, name);
+                    pollPairing();
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> { setBusy(false, null); showError(safeMessage(ex)); });
             }
         });
+    }
+
+    private void showPairingQr(String url, String id, String code, String clientName) {
+        try {
+            URL endpoint = new URL(url);
+            String host = endpoint.getHost();
+            if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+            int port = endpoint.getPort();
+            String fingerprint = normaliseFingerprint(fingerprintField.getText());
+            JSONObject payload = new JSONObject()
+                .put("type", "dosey-companion-pairing")
+                .put("protocolVersion", 1)
+                .put("host", host)
+                .put("port", port)
+                .put("fingerprint", fingerprint)
+                .put("requestId", id)
+                .put("verificationCode", code)
+                .put("clientName", clientName);
+            BufferedImage qr = MatrixToImageWriter.toBufferedImage(
+                new QRCodeWriter().encode(payload.toString(), BarcodeFormat.QR_CODE, 360, 360)
+            );
+            JLabel image = new JLabel(new ImageIcon(qr));
+            image.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.add(image, BorderLayout.CENTER);
+            JLabel instruction = new JLabel("<html>In Dosey on Android, tap <b>Scan PC pairing QR</b>.<br>"
+                + "Check that the six-digit code matches: <b>" + code + "</b></html>");
+            panel.add(instruction, BorderLayout.SOUTH);
+            JOptionPane.showMessageDialog(frame, panel, "Pair Dosey Companion", JOptionPane.PLAIN_MESSAGE);
+        } catch (Exception ex) {
+            showError("Could not generate the pairing QR code: " + safeMessage(ex));
+        }
     }
 
     private void pollPairing() {
