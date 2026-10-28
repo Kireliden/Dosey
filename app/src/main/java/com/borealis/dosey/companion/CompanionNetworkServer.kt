@@ -177,7 +177,7 @@ internal class CompanionNetworkServer(
                     else -> "404 Not Found"
                 }
                 val payload = body.toByteArray(Charsets.UTF_8)
-                val response = "HTTP/1.1 $status\\r\\nContent-Type: application/json; charset=utf-8\\r\\nContent-Length: ${payload.size}\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\n\\r\\n"
+                val response = "HTTP/1.1 $status\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${payload.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
                 val output = client.outputStream
                 output.write(response.toByteArray(Charsets.US_ASCII))
                 output.write(payload)
