@@ -16,6 +16,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
 import java.net.InetAddress;
+import java.net.Inet4Address;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
 import java.util.ArrayList;
@@ -148,7 +149,7 @@ public final class DoseyCompanionApp {
                 NetworkInterface networkInterface = interfaces.nextElement();
                 try {
                     if (!networkInterface.isUp() || networkInterface.isLoopback()) continue;
-                    boolean hasIpv4 = networkInterface.inetAddresses().hasMoreElements();
+                    boolean hasIpv4 = networkInterface.inetAddresses().anyMatch(address -> address instanceof Inet4Address && !address.isLoopbackAddress() && !address.isLinkLocalAddress());
                     if (!hasIpv4) continue;
                     for (Enumeration<InetAddress> addresses = networkInterface.getInetAddresses(); addresses.hasMoreElements();) {
                         InetAddress address = addresses.nextElement();
