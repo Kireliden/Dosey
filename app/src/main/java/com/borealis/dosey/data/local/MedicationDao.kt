@@ -25,6 +25,9 @@ interface MedicationDao {
     @Query("UPDATE medications SET stockQuantity = MAX(0, stockQuantity - :units) WHERE id = :medicationId AND stockQuantity >= 0")
     suspend fun deductStock(medicationId: Long, units: Int)
 
+    @Query("UPDATE medications SET stockQuantity = stockQuantity + :units WHERE id = :medicationId AND stockQuantity >= 0")
+    suspend fun addStock(medicationId: Long, units: Int)
+
     @Delete
     suspend fun delete(medication: MedicationEntity)
 }
