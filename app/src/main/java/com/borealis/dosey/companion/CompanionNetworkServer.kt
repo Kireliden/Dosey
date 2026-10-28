@@ -23,12 +23,13 @@ import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
 import javax.security.auth.x500.X500Principal
+import kotlinx.coroutines.runBlocking
+import com.borealis.dosey.data.local.DoseyDatabase
 
 /**
  * Minimal TLS-only endpoint for Companion bootstrap.
  *
- * Until pairing/authentication is implemented, only the non-sensitive status endpoint is served.
- * No medication data or write routes are exposed here.
+ * TLS-only local API. Medical data is available only to clients with an approved, active credential.
  */
 internal class CompanionNetworkServer(
     private val context: Context,
@@ -160,6 +161,8 @@ internal class CompanionNetworkServer(
                 var contentLength = 0
                 var transferEncodingSeen = false
                 var requestBodyDeclared = false
+                var authorizationHeader: String? = null
+                var authorizationHeaderCount = 0
                 while (headersValid) {
                     val line = readAsciiLine(input, MAX_HEADER_LINE_BYTES)
                     if (line == null) {
@@ -204,6 +207,10 @@ internal class CompanionNetworkServer(
                             transferEncodingSeen = true
                             requestBodyDeclared = true
                         }
+                        "authorization" -> {
+                            authorizationHeaderCount++
+                            authorizationHeader = value
+                        }
                     }
                 }
                 val parts = requestLine.split(" ")
@@ -215,13 +222,16 @@ internal class CompanionNetworkServer(
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
                 val isPairRequest = requestLineValid &&
                     parts[0] == "POST" && parts[1] == "/v1/pair/request" && parts[2] == "HTTP/1.1"
+                val isPairConfirm = requestLineValid &&
+                    parts[0] == "POST" && parts[1] == "/v1/pair/confirm" && parts[2] == "HTTP/1.1"
+                val isCommandRequest = requestLineValid &&
+                    parts[0] == "POST" && parts[1] == "/v1/commands" && parts[2] == "HTTP/1.1"
+                val expectsBody = isPairRequest || isPairConfirm || isCommandRequest
                 val headersSafe = headersValid && !transferEncodingSeen &&
-                    hostHeaderCount <= 1 &&
+                    hostHeaderCount <= 1 && authorizationHeaderCount <= 1 &&
                     (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen) &&
-                    (!requestBodyDeclared && (
-                        (!isPairRequest && contentLength == 0) ||
-                            (isPairRequest && contentLength in 1..MAX_PAIR_REQUEST_BODY_BYTES)
-                        ))
+                    !requestBodyDeclared &&
+                    (if (expectsBody) contentLength in 1..MAX_REQUEST_BODY_BYTES else contentLength == 0)
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
                 val pairStatusRequest = headersSafe && requestLineValid &&
@@ -232,20 +242,18 @@ internal class CompanionNetworkServer(
                         it.matches(Regex("[a-fA-F0-9-]{36}"))
                     }
                 } else null
-                val pairRequestBody = if (headersSafe && isPairRequest) {
+                val requestBody = if (headersSafe && expectsBody) {
                     val bytes = ByteArray(contentLength)
                     var offset = 0
                     while (offset < bytes.size) {
                         val count = input.read(bytes, offset, bytes.size - offset)
-                        if (count < 0) throw java.io.IOException("Incomplete pairing request body")
+                        if (count < 0) throw java.io.IOException("Incomplete request body")
                         offset += count
                     }
-                    try {
-                        JSONObject(bytes.toString(Charsets.UTF_8))
-                    } catch (_: org.json.JSONException) {
-                        null
-                    }
+                    try { JSONObject(bytes.toString(Charsets.UTF_8)) }
+                    catch (_: org.json.JSONException) { null }
                 } else null
+                val pairRequestBody = requestBody.takeIf { isPairRequest }
                 val clientNameValue = pairRequestBody?.opt("clientName")
                 val pairRequestInputValid = pairRequestBody != null &&
                     pairRequestBody.length() == 1 &&
@@ -256,6 +264,31 @@ internal class CompanionNetworkServer(
                     CompanionPairingManager.createRequest(clientNameValue as String)
                 } else null
                 val pairRequestValid = isPairRequest && pairRequestInputValid && pairingRequest != null
+                val confirmId = requestBody?.optString("requestId", "").orEmpty()
+                val confirmCode = requestBody?.optString("verificationCode", "").orEmpty()
+                val confirmInputValid = isPairConfirm && requestBody?.length() == 2 &&
+                    confirmId.matches(Regex("[a-fA-F0-9-]{36}")) &&
+                    confirmCode.matches(Regex("[0-9]{6}"))
+                val confirmedPairing = if (confirmInputValid)
+                    CompanionPairingManager.confirmApproved(confirmId, confirmCode) else null
+                val issuedCredential = if (confirmedPairing != null) try {
+                    CompanionCredentialStore.issue(context, confirmedPairing.clientName)
+                } catch (_: Exception) { null } else null
+                val bearerToken = authorizationHeader?.takeIf { it.startsWith("Bearer ") }
+                    ?.removePrefix("Bearer ")?.takeIf { CompanionCredentialStore.isAuthenticated(context, it) }
+                val isSnapshotRequest = headersSafe && requestLineValid &&
+                    parts[0] == "GET" && parts[1] == "/v1/snapshot" && parts[2] == "HTTP/1.1"
+                val isChangesRequest = headersSafe && requestLineValid &&
+                    parts[0] == "GET" && parts[1].startsWith("/v1/changes?after=") && parts[2] == "HTTP/1.1"
+                val afterRevision = if (isChangesRequest) parts[1].substringAfter("after=").toLongOrNull() else null
+                val snapshotResponse = if (bearerToken != null && (isSnapshotRequest || isChangesRequest)) {
+                    runCatching {
+                        runBlocking { CompanionSnapshotExporter.create(DoseyDatabase.getInstance(context)) }
+                            .toJson()
+                            .put("fullSnapshot", true)
+                            .put("resetRequired", isChangesRequest && (afterRevision == null || afterRevision < 0L))
+                    }.getOrNull()
+                } else null
                 val body = when {
                     !headersSafe || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
@@ -271,6 +304,21 @@ internal class CompanionNetworkServer(
                         .put("status", pairStatusId?.let(CompanionPairingManager::status) ?: "not_found")
                         .put("credentialsIssued", false)
                         .toString()
+                    isPairConfirm && issuedCredential != null -> JSONObject()
+                        .put("clientId", issuedCredential.client.id)
+                        .put("clientName", issuedCredential.client.name)
+                        .put("credential", issuedCredential.token)
+                        .put("createdAt", issuedCredential.client.createdAt)
+                        .toString()
+                    isPairConfirm -> JSONObject().put("error",
+                        if (!confirmInputValid) "invalid_pair_confirmation" else "pairing_not_approved_or_code_mismatch"
+                    ).toString()
+                    (isSnapshotRequest || isChangesRequest) && bearerToken == null ->
+                        JSONObject().put("error", "unauthorized").toString()
+                    (isSnapshotRequest || isChangesRequest) && snapshotResponse != null -> snapshotResponse.toString()
+                    (isSnapshotRequest || isChangesRequest) -> JSONObject().put("error", "snapshot_unavailable").toString()
+                    isCommandRequest && bearerToken == null -> JSONObject().put("error", "unauthorized").toString()
+                    isCommandRequest -> JSONObject().put("error", "unsupported_command").toString()
                     pairRequestValid -> JSONObject()
                         .put("requestId", pairingRequest!!.id)
                         .put("verificationCode", pairingRequest.verificationCode)
@@ -288,9 +336,15 @@ internal class CompanionNetworkServer(
                 }
                 val status = when {
                     !headersSafe || !requestLineValid -> "400 Bad Request"
-                    isStatusRequest || pairStatusRequest || pairRequestValid -> "200 OK"
+                    isStatusRequest || pairStatusRequest || pairRequestValid ||
+                        (isPairConfirm && issuedCredential != null) ||
+                        ((isSnapshotRequest || isChangesRequest) && snapshotResponse != null) -> "200 OK"
+                    (isSnapshotRequest || isChangesRequest || isCommandRequest) && bearerToken == null -> "401 Unauthorized"
+                    isPairConfirm && !confirmInputValid -> "400 Bad Request"
+                    isPairConfirm -> "409 Conflict"
                     isPairRequest && !pairRequestInputValid -> "400 Bad Request"
                     isPairRequest -> "409 Conflict"
+                    isCommandRequest -> "400 Bad Request"
                     else -> "404 Not Found"
                 }
                 val payload = body.toByteArray(Charsets.UTF_8)
@@ -380,5 +434,6 @@ internal class CompanionNetworkServer(
         private const val MAX_HEADER_BYTES = 8192
         private const val MAX_HEADER_COUNT = 64
         private const val MAX_PAIR_REQUEST_BODY_BYTES = 1024
+        private const val MAX_REQUEST_BODY_BYTES = 16 * 1024
     }
 }
