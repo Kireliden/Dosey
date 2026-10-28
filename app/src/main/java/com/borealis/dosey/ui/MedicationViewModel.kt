@@ -60,6 +60,12 @@ class MedicationViewModel(
         }
     }
 
+    fun markDoseTaken(medication: MedicationEntity, date: String, minutes: Int) {
+        viewModelScope.launch {
+            repository.markDoseTaken(medication, date, minutes)
+        }
+    }
+
     fun addSchedule(medicationId: Long, minutesAfterMidnight: Int) {
         if (minutesAfterMidnight !in 0..1439) return
         viewModelScope.launch {
