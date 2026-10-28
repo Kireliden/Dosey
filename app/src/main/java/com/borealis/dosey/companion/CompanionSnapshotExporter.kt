@@ -18,6 +18,7 @@ import org.json.JSONObject
 internal object CompanionSnapshotExporter {
     data class Snapshot(
         val generatedAt: Long,
+        val revision: Long,
         val medications: List<MedicationEntity>,
         val schedules: List<DoseScheduleEntity>,
         val doseLogs: List<DoseLogEntity>,
@@ -26,6 +27,7 @@ internal object CompanionSnapshotExporter {
         fun toJson(): JSONObject = JSONObject()
             .put("protocolVersion", PROTOCOL_VERSION)
             .put("generatedAt", generatedAt)
+            .put("revision", revision)
             .put("medications", JSONArray().apply {
                 medications.forEach { item ->
                     put(JSONObject()
@@ -76,6 +78,8 @@ internal object CompanionSnapshotExporter {
     suspend fun create(database: DoseyDatabase): Snapshot = database.withTransaction {
         Snapshot(
             generatedAt = System.currentTimeMillis(),
+            revision = database.companionSyncMetadataDao().getRevision()
+                ?: error("Companion snapshot revision metadata is missing"),
             medications = database.medicationDao().getAllForSnapshot(),
             schedules = database.doseScheduleDao().getAllForSnapshot(),
             doseLogs = database.doseLogDao().getAllForSnapshot(),
