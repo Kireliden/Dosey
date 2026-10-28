@@ -44,6 +44,18 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        if (action == ACTION_SNOOZE) {
+            DoseAlarmScheduler(context).scheduleSnooze(
+                medicationId = medicationId,
+                medicationName = medicationName,
+                minutes = minutes,
+                snoozeMinutes = SNOOZE_MINUTES
+            )
+            NotificationManagerCompat.from(context).cancel(notificationId(medicationId, minutes))
+            return
+        }
+
+        val isSnoozedReminder = intent.getBooleanExtra(EXTRA_IS_SNOOZED_REMINDER, false)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -63,6 +75,7 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .addAction(0, context.getString(R.string.mark_taken), actionIntent(context, ACTION_TAKEN, medicationId, medicationName, minutes))
             .addAction(0, context.getString(R.string.mark_missed), actionIntent(context, ACTION_MISSED, medicationId, medicationName, minutes))
+            .addAction(0, context.getString(R.string.snooze_reminder), actionIntent(context, ACTION_SNOOZE, medicationId, medicationName, minutes))
             .build()
         try {
             NotificationManagerCompat.from(context).notify(notificationId(medicationId, minutes), notification)
@@ -70,17 +83,25 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             // Android 13+ notification permission may not have been granted.
         }
 
-        // Alarms are one-shot so they can fire much closer to the requested time.
-        // Schedule tomorrow's reminder after handling today's one.
-        DoseAlarmScheduler(context).scheduleNextOccurrence(
-            medicationId = medicationId,
-            medicationName = medicationName,
-            minutes = minutes,
-            includeToday = false
-        )
+        // Only the regular daily alarm should schedule tomorrow's occurrence.
+        // A snoozed reminder is a one-off and must not alter the daily schedule.
+        if (!isSnoozedReminder) {
+            DoseAlarmScheduler(context).scheduleNextOccurrence(
+                medicationId = medicationId,
+                medicationName = medicationName,
+                minutes = minutes,
+                includeToday = false
+            )
+        }
     }
 
     private fun actionIntent(context: Context, action: String, id: Long, name: String, minutes: Int): PendingIntent {
+        val requestCode = when (action) {
+            ACTION_TAKEN -> notificationId(id, minutes) + 1
+            ACTION_MISSED -> notificationId(id, minutes) + 2
+            ACTION_SNOOZE -> notificationId(id, minutes) + 3
+            else -> notificationId(id, minutes)
+        }
         val intent = Intent(context, DoseAlarmReceiver::class.java).apply {
             this.action = action
             putExtra(EXTRA_MEDICATION_ID, id)
@@ -88,8 +109,8 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             putExtra(EXTRA_MINUTES, minutes)
         }
         return PendingIntent.getBroadcast(
-            context, notificationId(id, minutes) + if (action == ACTION_TAKEN) 1 else 2,
-            intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 
@@ -97,12 +118,15 @@ class DoseAlarmReceiver : BroadcastReceiver() {
         const val ACTION_REMIND = "com.borealis.dosey.ACTION_REMIND"
         const val ACTION_TAKEN = "com.borealis.dosey.ACTION_TAKEN"
         const val ACTION_MISSED = "com.borealis.dosey.ACTION_MISSED"
+        const val ACTION_SNOOZE = "com.borealis.dosey.ACTION_SNOOZE"
         const val EXTRA_MEDICATION_ID = "medication_id"
         const val EXTRA_MEDICATION_NAME = "medication_name"
         const val EXTRA_MINUTES = "minutes"
+        const val EXTRA_IS_SNOOZED_REMINDER = "is_snoozed_reminder"
         const val CHANNEL_ID = "dose_reminders"
         const val STATUS_TAKEN = "TAKEN"
         const val STATUS_MISSED = "MISSED"
+        const val SNOOZE_MINUTES = 10
 
         fun notificationId(id: Long, minutes: Int) = ((id * 31 + minutes) % Int.MAX_VALUE).toInt()
         fun formatTime(minutes: Int) = String.format(Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60)
