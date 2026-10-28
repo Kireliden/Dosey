@@ -24,6 +24,7 @@ internal object CompanionPairingManager {
     private var completedRequestId: String? = null
     private var completedStatus: String? = null
     private var completedAt: Long = 0L
+    private var completedRequest: Request? = null
     private var lastRequestAt: Long = 0L
     private var recentRequestCount = 0
     private var rateWindowStartedAt: Long = 0L
@@ -62,12 +63,14 @@ internal object CompanionPairingManager {
         if (request.expiresAt <= System.currentTimeMillis()) {
             mutablePendingRequest.value = null
             completedRequestId = requestId
+            completedRequest = request
             completedStatus = "expired"
             completedAt = System.currentTimeMillis()
             return false
         }
         mutablePendingRequest.value = null
         completedRequestId = requestId
+        completedRequest = request
         completedStatus = "approved"
         completedAt = System.currentTimeMillis()
         return true
@@ -79,6 +82,7 @@ internal object CompanionPairingManager {
         if (request.id != requestId) return false
         mutablePendingRequest.value = null
         completedRequestId = requestId
+        completedRequest = request
         completedStatus = "rejected"
         completedAt = System.currentTimeMillis()
         return true
@@ -91,6 +95,7 @@ internal object CompanionPairingManager {
             if (request.expiresAt <= System.currentTimeMillis()) {
                 mutablePendingRequest.value = null
                 completedRequestId = requestId
+                completedRequest = request
                 completedStatus = "expired"
                 completedAt = System.currentTimeMillis()
                 return "expired"
@@ -103,12 +108,29 @@ internal object CompanionPairingManager {
         return "not_found"
     }
 
+
+    @Synchronized
+    fun confirmApproved(requestId: String, verificationCode: String): Request? {
+        val request = completedRequest ?: return null
+        if (completedRequestId != requestId || completedStatus != "approved") return null
+        if (System.currentTimeMillis() - completedAt > RESULT_RETENTION_MS) return null
+        if (!java.security.MessageDigest.isEqual(
+                request.verificationCode.toByteArray(Charsets.US_ASCII),
+                verificationCode.toByteArray(Charsets.US_ASCII)
+            )
+        ) return null
+        completedStatus = "completed"
+        completedRequest = null
+        return request
+    }
+
     @Synchronized
     fun clearExpired() {
         val request = mutablePendingRequest.value
         if (request != null && request.expiresAt <= System.currentTimeMillis()) {
             mutablePendingRequest.value = null
             completedRequestId = request.id
+            completedRequest = request
             completedStatus = "expired"
             completedAt = System.currentTimeMillis()
         }
@@ -119,6 +141,7 @@ internal object CompanionPairingManager {
         mutablePendingRequest.value = null
         completedRequestId = null
         completedStatus = null
+        completedRequest = null
         completedAt = 0L
     }
 
