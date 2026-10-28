@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DoseyHome(viewModel: MedicationViewModel) {
+    val context = LocalContext.current
     val medications by viewModel.medications.collectAsStateWithLifecycle()
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
     val doseLogs by viewModel.doseLogs.collectAsStateWithLifecycle()
@@ -331,8 +332,6 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
             }
         )
     }
-
-    val context = LocalContext.current
 
     medicationForSchedule?.let { medication ->
         DoseScheduleDialog(
