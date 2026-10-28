@@ -722,7 +722,7 @@ private fun MedicationDialog(
                 )
                 OutlinedTextField(
                     value = stockText,
-                    onValueChange = { stockText = it.filter(Char::isDigit); inventoryError = false },
+                    onValueChange = { stockText = it.filter { character -> character.isDigit() }; inventoryError = false },
                     label = { Text(stringResource(R.string.stock_quantity_label)) },
                     placeholder = { Text(stringResource(R.string.stock_untracked_hint)) },
                     singleLine = true,
@@ -730,14 +730,14 @@ private fun MedicationDialog(
                 )
                 OutlinedTextField(
                     value = lowStockText,
-                    onValueChange = { lowStockText = it.filter(Char::isDigit); inventoryError = false },
+                    onValueChange = { lowStockText = it.filter { character -> character.isDigit() }; inventoryError = false },
                     label = { Text(stringResource(R.string.low_stock_threshold_label)) },
                     singleLine = true,
                     isError = inventoryError
                 )
                 OutlinedTextField(
                     value = unitsPerDoseText,
-                    onValueChange = { unitsPerDoseText = it.filter(Char::isDigit); inventoryError = false },
+                    onValueChange = { unitsPerDoseText = it.filter { character -> character.isDigit() }; inventoryError = false },
                     label = { Text(stringResource(R.string.units_per_dose_label)) },
                     singleLine = true,
                     isError = inventoryError
