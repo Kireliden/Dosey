@@ -95,7 +95,7 @@ internal class CompanionNetworkServer(
         val manager = context.getSystemService(NsdManager::class.java) ?: return
         nsdManager = manager
         val info = NsdServiceInfo().apply {
-            serviceName = "Dosey-\${randomInstanceId()}"
+            serviceName = "Dosey-${randomInstanceId()}"
             serviceType = SERVICE_TYPE
             setPort(port)
             setAttribute("protocol", "1")
