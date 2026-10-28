@@ -98,6 +98,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var medicationBeingEdited by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationPendingDeletion by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationForSchedule by remember { mutableStateOf<MedicationEntity?>(null) }
+    var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
 
     val today = LocalDate.now().format(
         DateTimeFormatter.ofPattern(
@@ -217,6 +218,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                             medication = medication,
                             schedules = schedules.filter { it.medicationId == medication.id },
                             onManageSchedule = { medicationForSchedule = medication },
+                            onRefill = { medicationForRefill = medication },
                             onEdit = {
                                 medicationBeingEdited = medication
                                 showMedicationDialog = true
@@ -340,6 +342,17 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
         )
     }
 
+    medicationForRefill?.let { medication ->
+        RefillStockDialog(
+            medication = medication,
+            onDismiss = { medicationForRefill = null },
+            onConfirm = { quantity ->
+                viewModel.refillMedication(medication.id, quantity)
+                medicationForRefill = null
+            }
+        )
+    }
+
     medicationForSchedule?.let { medication ->
         DoseScheduleDialog(
             context = context,
@@ -441,6 +454,7 @@ private fun MedicationCard(
     medication: MedicationEntity,
     schedules: List<DoseScheduleEntity>,
     onManageSchedule: () -> Unit,
+    onRefill: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -523,6 +537,11 @@ private fun MedicationCard(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (medication.stockQuantity >= 0) {
+                        TextButton(onClick = onRefill) {
+                            Text(stringResource(R.string.refill_stock))
+                        }
+                    }
                     TextButton(onClick = onManageSchedule) {
                         Text(stringResource(R.string.manage_schedule))
                     }
@@ -536,6 +555,59 @@ private fun MedicationCard(
             }
         }
     }
+}
+
+@Composable
+private fun RefillStockDialog(
+    medication: MedicationEntity,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var quantityText by remember(medication.id) { mutableStateOf("") }
+    var invalidQuantity by remember(medication.id) { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.refill_stock_title, medication.name)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.refill_stock_current, medication.stockQuantity))
+                OutlinedTextField(
+                    value = quantityText,
+                    onValueChange = {
+                        quantityText = it.filter { character -> character.isDigit() }
+                        invalidQuantity = false
+                    },
+                    label = { Text(stringResource(R.string.refill_amount_label)) },
+                    placeholder = { Text("28") },
+                    singleLine = true,
+                    isError = invalidQuantity
+                )
+                if (invalidQuantity) {
+                    Text(
+                        text = stringResource(R.string.refill_amount_invalid),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val quantity = quantityText.toIntOrNull()
+                if (quantity == null || quantity <= 0 || medication.stockQuantity + quantity < medication.stockQuantity) {
+                    invalidQuantity = true
+                } else {
+                    onConfirm(quantity)
+                }
+            }) {
+                Text(stringResource(R.string.refill_stock))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        }
+    )
 }
 
 @Composable
