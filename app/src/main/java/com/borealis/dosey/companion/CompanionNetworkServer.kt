@@ -5,6 +5,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.Log
 import org.json.JSONObject
 import java.math.BigInteger
 import java.net.Socket
@@ -152,10 +153,18 @@ internal class CompanionNetworkServer(
     private fun handleClient(socket: Socket) {
         socket.use { raw ->
             try {
-                if (!isLocalNetworkAddress(raw.inetAddress)) return
+                if (!isLocalNetworkAddress(raw.inetAddress)) {
+                    Log.w(TAG, "Rejected non-local companion client: ${raw.inetAddress.hostAddress}")
+                    return
+                }
                 val client = raw as javax.net.ssl.SSLSocket
                 client.soTimeout = 4000
-                client.startHandshake()
+                try {
+                    client.startHandshake()
+                } catch (e: Exception) {
+                    Log.e(TAG, "TLS handshake failed from ${raw.inetAddress.hostAddress}; enabled protocols=${client.enabledProtocols.joinToString()}", e)
+                    return
+                }
                 val input = client.inputStream
                 val requestLine = readAsciiLine(input, MAX_REQUEST_LINE_BYTES) ?: return
                 var headerBytes = 0
@@ -388,8 +397,10 @@ internal class CompanionNetworkServer(
                 output.write(response.toByteArray(Charsets.US_ASCII))
                 output.write(payload)
                 output.flush()
-            } catch (_: Exception) {
-                // Invalid or interrupted clients are intentionally ignored.
+            } catch (e: Exception) {
+                // Keep malformed/interrupted requests from affecting the listener, but retain
+                // diagnostics so TLS and HTTP failures can be distinguished during setup.
+                Log.w(TAG, "Companion client handling failed", e)
             }
         }
     }
