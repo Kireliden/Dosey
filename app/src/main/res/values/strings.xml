@@ -1,3 +1,35 @@
 <resources>
     <string name="app_name">Dosey</string>
+    <string name="home_tagline">Your treatment, under control.</string>
+    <string name="day_at_a_glance">Your day at a glance</string>
+    <string name="no_medications_yet">You haven’t added any medications yet.</string>
+    <string name="one_medication_registered">You have 1 medication registered.</string>
+    <string name="medications_registered">You have %1$d medications registered.</string>
+    <string name="doses_will_appear">Your doses and schedules will appear here.</string>
+    <string name="my_medications">My medications</string>
+    <string name="lets_get_started">Let’s get started</string>
+    <string name="add_first_medication">Add your first medication to start organising your treatment.</string>
+    <string name="add_medication">Add medication</string>
+    <string name="edit_medication">Edit medication</string>
+    <string name="upcoming_doses">Upcoming doses</string>
+    <string name="upcoming_doses_empty">Once you add your treatments, you can see your upcoming doses here.</string>
+    <string name="no_schedules_yet">No schedules configured yet. We’ll add them in the next step.</string>
+    <string name="new_medication">New medication</string>
+    <string name="edit_medication_title">Edit medication details</string>
+    <string name="medication_name_question">What is the medication called?</string>
+    <string name="medication_name">Name</string>
+    <string name="medication_name_example">e.g. Vitamin D</string>
+    <string name="dose_description">Dose / strength</string>
+    <string name="dose_example">e.g. 10 mg, 1 tablet</string>
+    <string name="notes_optional">Notes (optional)</string>
+    <string name="notes_example">Anything you want to remember</string>
+    <string name="save">Save</string>
+    <string name="add">Add</string>
+    <string name="cancel">Cancel</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="delete_medication_title">Delete medication?</string>
+    <string name="delete_medication_message">“%1$s” will be removed from your medication list. This can’t be undone.</string>
+    <string name="dose_not_configured">Dose not configured</string>
+    <string name="date_pattern">EEEE, d MMMM</string>
 </resources>
