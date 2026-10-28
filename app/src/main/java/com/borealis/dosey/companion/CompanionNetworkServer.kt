@@ -150,6 +150,8 @@ internal class CompanionNetworkServer(
                 var headerBytes = 0
                 var headerCount = 0
                 var headersValid = true
+                var hostHeaderSeen = false
+                var requestBodyDeclared = false
                 while (headersValid) {
                     val line = readAsciiLine(input, MAX_HEADER_LINE_BYTES)
                     if (line == null) {
@@ -163,19 +165,36 @@ internal class CompanionNetworkServer(
                         break
                     }
                     if (line.isEmpty()) break
-                    if (':' !in line) {
+                    val separator = line.indexOf(':')
+                    if (separator <= 0) {
                         headersValid = false
                         break
+                    }
+                    val name = line.substring(0, separator).trim().lowercase(java.util.Locale.ROOT)
+                    val value = line.substring(separator + 1).trim()
+                    if (name.isEmpty() || name.any { !it.isLetterOrDigit() && it != '-' }) {
+                        headersValid = false
+                        break
+                    }
+                    when (name) {
+                        "host" -> hostHeaderSeen = value.isNotEmpty()
+                        "content-length" -> {
+                            val length = value.toLongOrNull()
+                            if (length == null || length != 0L) requestBodyDeclared = true
+                        }
+                        "transfer-encoding" -> requestBodyDeclared = true
                     }
                 }
                 val parts = requestLine.split(" ")
                 val requestLineValid = parts.size == 3 &&
                     parts[0].isNotBlank() && parts[1].startsWith("/") &&
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
-                val isStatusRequest = headersValid && requestLineValid &&
+                val headersSafe = headersValid && !requestBodyDeclared &&
+                    (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen)
+                val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
                 val body = when {
-                    !headersValid || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
+                    !headersSafe || !requestLineValid -> JSONObject().put("error", "bad_request").toString()
                     isStatusRequest -> JSONObject()
                         .put("service", "Dosey Companion")
                         .put("protocolVersion", 1)
@@ -186,7 +205,7 @@ internal class CompanionNetworkServer(
                     else -> JSONObject().put("error", "not_found").toString()
                 }
                 val status = when {
-                    !headersValid || !requestLineValid -> "400 Bad Request"
+                    !headersSafe || !requestLineValid -> "400 Bad Request"
                     isStatusRequest -> "200 OK"
                     else -> "404 Not Found"
                 }
