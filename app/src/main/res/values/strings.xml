@@ -37,6 +37,11 @@
     <string name="low_stock_threshold_label">Low-stock alert at</string>
     <string name="units_per_dose_label">Units used per dose</string>
     <string name="stock_quantity">Stock: %1$d units</string>
+    <string name="refill_stock">Refill</string>
+    <string name="refill_stock_title">Refill %1$s</string>
+    <string name="refill_stock_current">Current stock: %1$d units</string>
+    <string name="refill_amount_label">Units added</string>
+    <string name="refill_amount_invalid">Enter a quantity greater than zero.</string>
     <string name="low_stock_warning">Low stock · consider a refill</string>
     <string name="invalid_inventory_values">Enter a valid stock quantity, threshold and units per dose.</string>
     <string name="dose_history">Dose history</string>
