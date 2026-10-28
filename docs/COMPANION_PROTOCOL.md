@@ -62,3 +62,8 @@ The desktop client stores the last valid snapshot and the timestamp it was recei
 Android now has an isolated storage component for future per-PC credentials. It generates 256-bit random bearer tokens, persists only SHA-256 token verifiers, and encrypts the client registry with AES-256-GCM using a key held by Android Keystore. The API supports listing client metadata, constant-time verifier comparison, and revoking a client. Raw tokens are returned only once by the issuance method.
 
 This component is intentionally **not wired to pairing approval or HTTP routes**. The current desktop client does not exist yet, so certificate-fingerprint comparison and pinning UX cannot be verified end-to-end. No credentials are issued by the running app, no authentication route exists, and no medication data is exposed. Corrupt or undecryptable stored state fails closed rather than being silently replaced. Revocation takes effect for future authentication checks once the eventual authenticated routes use this store.
+
+
+## Snapshot preparation foundation
+
+Android now has an internal snapshot exporter that reads medications, schedules, scheduled-dose history, and one-off-dose history within a single Room transaction, then serializes those records to a protocol-versioned JSON structure. Matching suspend DAO queries were added for this purpose. The exporter is not exposed over HTTP and does not bypass authentication. Before wiring it to a route, the protocol still needs authenticated client identity, certificate-pinned desktop pairing, and a durable monotonic revision strategy so the PC can safely tell whether a snapshot is newer.
