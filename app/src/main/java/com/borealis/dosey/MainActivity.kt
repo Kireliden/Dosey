@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.borealis.dosey.companion.CompanionService
+import com.borealis.dosey.companion.CompanionNetworkServer
 import com.borealis.dosey.companion.CompanionPairingManager
 import com.borealis.dosey.data.MedicationRepository
 import com.borealis.dosey.data.local.DoseLogEntity
@@ -113,6 +114,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var selectedScreen by remember { mutableStateOf("today") }
     var companionEnabled by remember { mutableStateOf(false) }
     val pendingPairingRequest by CompanionPairingManager.pendingRequest.collectAsStateWithLifecycle()
+    val companionFingerprint by CompanionNetworkServer.certificateFingerprint.collectAsStateWithLifecycle()
     LaunchedEffect(companionEnabled) {
         while (companionEnabled) {
             CompanionPairingManager.clearExpired()
@@ -250,6 +252,23 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                     ),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
+                                if (companionEnabled && companionFingerprint != null) {
+                                    androidx.compose.material3.HorizontalDivider()
+                                    Text(
+                                        text = stringResource(R.string.companion_certificate_fingerprint_title),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = companionFingerprint.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.companion_certificate_fingerprint_help),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 Button(
                                     onClick = {
                                         val action = if (companionEnabled) CompanionService.ACTION_STOP
