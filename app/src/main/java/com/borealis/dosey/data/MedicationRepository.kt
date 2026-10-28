@@ -62,6 +62,22 @@ class MedicationRepository(
         medicationDao.addStock(medicationId, units)
     }
 
+    suspend fun markDoseTaken(medication: MedicationEntity, date: String, minutes: Int) {
+        val previousLog = doseLogDao.find(medication.id, date, minutes)
+        doseLogDao.upsert(
+            DoseLogEntity(
+                medicationId = medication.id,
+                medicationName = medication.name,
+                scheduledDate = date,
+                minutesAfterMidnight = minutes,
+                status = "TAKEN"
+            )
+        )
+        if (previousLog?.status != "TAKEN" && medication.stockQuantity >= 0) {
+            medicationDao.deductStock(medication.id, medication.unitsPerDose)
+        }
+    }
+
     fun observeDoseLogs(): Flow<List<DoseLogEntity>> = doseLogDao.observeAll()
 
     fun observeSchedules(): Flow<List<DoseScheduleEntity>> =
