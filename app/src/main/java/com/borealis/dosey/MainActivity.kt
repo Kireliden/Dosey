@@ -47,6 +47,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.borealis.dosey.companion.CompanionService
 import com.borealis.dosey.data.MedicationRepository
 import com.borealis.dosey.data.local.DoseLogEntity
 import com.borealis.dosey.data.local.DoseScheduleEntity
@@ -57,6 +58,7 @@ import com.borealis.dosey.notifications.DoseAlarmScheduler
 import com.borealis.dosey.ui.MedicationViewModel
 import com.borealis.dosey.ui.theme.DoseyTheme
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -106,6 +108,7 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var medicationForSchedule by remember { mutableStateOf<MedicationEntity?>(null) }
     var medicationForRefill by remember { mutableStateOf<MedicationEntity?>(null) }
     var selectedScreen by remember { mutableStateOf("today") }
+    var companionEnabled by remember { mutableStateOf(false) }
     val drawerState = androidx.compose.material3.rememberDrawerState(
         initialValue = androidx.compose.material3.DrawerValue.Closed
     )
@@ -139,7 +142,8 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                 listOf(
                     "today" to R.string.nav_today,
                     "medications" to R.string.nav_medications,
-                    "history" to R.string.nav_history
+                    "history" to R.string.nav_history,
+                    "companion" to R.string.nav_companion
                 ).forEach { (screen, label) ->
                     androidx.compose.material3.NavigationDrawerItem(
                         label = { Text(stringResource(label)) },
@@ -195,7 +199,8 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                             text = if (selectedScreen == "today") today else stringResource(
                                 when (selectedScreen) {
                                     "medications" -> R.string.nav_medications
-                                    else -> R.string.nav_history
+                                    "history" -> R.string.nav_history
+                                    else -> R.string.nav_companion
                                 }
                             ),
                             style = MaterialTheme.typography.bodyLarge,
@@ -205,6 +210,59 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                 }
 
                 when (selectedScreen) {
+                    "companion" -> {
+                        Text(
+                            text = stringResource(R.string.companion_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (companionEnabled) R.string.companion_enabled_title
+                                        else R.string.companion_disabled_title
+                                    ),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = stringResource(
+                                        if (companionEnabled) R.string.companion_enabled_detail
+                                        else R.string.companion_disabled_detail
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Button(
+                                    onClick = {
+                                        val action = if (companionEnabled) CompanionService.ACTION_STOP
+                                            else CompanionService.ACTION_START
+                                        val serviceIntent = Intent(context, CompanionService::class.java).setAction(action)
+                                        if (companionEnabled) context.startService(serviceIntent)
+                                        else androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
+                                        companionEnabled = !companionEnabled
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(
+                                        if (companionEnabled) R.string.companion_disable
+                                        else R.string.companion_enable
+                                    ))
+                                }
+                            }
+                        }
+                        Text(
+                            text = stringResource(R.string.companion_description),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                     "today" -> {
                         Text(
                             text = stringResource(R.string.today_doses_title),
