@@ -6,12 +6,15 @@ import com.borealis.dosey.data.local.DoseScheduleDao
 import com.borealis.dosey.data.local.DoseScheduleEntity
 import com.borealis.dosey.data.local.MedicationDao
 import com.borealis.dosey.data.local.MedicationEntity
+import com.borealis.dosey.data.local.OneOffDoseDao
+import com.borealis.dosey.data.local.OneOffDoseEntity
 import kotlinx.coroutines.flow.Flow
 
 class MedicationRepository(
     private val medicationDao: MedicationDao,
     private val doseScheduleDao: DoseScheduleDao,
-    private val doseLogDao: DoseLogDao
+    private val doseLogDao: DoseLogDao,
+    private val oneOffDoseDao: OneOffDoseDao
 ) {
     fun observeMedications(): Flow<List<MedicationEntity>> =
         medicationDao.observeAll()
@@ -79,6 +82,22 @@ class MedicationRepository(
     }
 
     fun observeDoseLogs(): Flow<List<DoseLogEntity>> = doseLogDao.observeAll()
+
+    fun observeOneOffDoses(): Flow<List<OneOffDoseEntity>> = oneOffDoseDao.observeAll()
+
+    fun observeOneOffSuggestions(): Flow<List<OneOffDoseEntity>> = oneOffDoseDao.observeSuggestions()
+
+    suspend fun recordOneOffDose(name: String, dose: String, date: String, minutes: Int) {
+        if (name.isBlank() || minutes !in 0..1439) return
+        oneOffDoseDao.insert(
+            OneOffDoseEntity(
+                medicationName = name.trim(),
+                doseDescription = dose.trim(),
+                scheduledDate = date,
+                minutesAfterMidnight = minutes
+            )
+        )
+    }
 
     fun observeSchedules(): Flow<List<DoseScheduleEntity>> =
         doseScheduleDao.observeAll()
