@@ -191,8 +191,8 @@ internal class CompanionNetworkServer(
         while (line.length <= maxLength) {
             val value = input.read()
             if (value == -1) return if (line.isEmpty()) null else line.toString()
-            if (value == '\\n'.code) {
-                if (line.isNotEmpty() && line.last() == '\\r') line.setLength(line.length - 1)
+            if (value == '\n'.code) {
+                if (line.isNotEmpty() && line.last() == '\r') line.setLength(line.length - 1)
                 return line.toString()
             }
             line.append(value.toChar())
