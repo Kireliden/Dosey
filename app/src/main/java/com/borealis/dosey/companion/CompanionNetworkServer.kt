@@ -198,7 +198,7 @@ internal class CompanionNetworkServer(
                     parts.none { it.isEmpty() } &&
                     parts[0].all { it in 'A'..'Z' || it in 'a'..'z' } &&
                     parts[1].startsWith("/") &&
-                    parts[1].none { it <= ' ' || it == '\\u007f' } &&
+                    parts[1].none { it <= ' ' || it.code == 127 } &&
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
                 val headersSafe = headersValid && !requestBodyDeclared && !hostHeaderDuplicate &&
                     (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen)
