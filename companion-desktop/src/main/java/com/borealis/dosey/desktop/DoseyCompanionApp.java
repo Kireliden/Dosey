@@ -15,6 +15,11 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
+import java.util.ArrayList;
+import java.util.List;
 import javax.net.ssl.HttpsURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -135,24 +140,51 @@ public final class DoseyCompanionApp {
     private void discoverDosey() {
         setBusy(true, "Searching the local network for Dosey…");
         CompletableFuture.runAsync(() -> {
-            try (JmDNS dns = JmDNS.create()) {
-                ServiceInfo[] services = dns.list("_dosey._tcp.local.", 4500);
-                if (services.length == 0) throw new IOException("No Dosey Companion found. Enable Companion on Android and check both devices are on the same Wi-Fi.");
-                ServiceInfo service = services[0];
-                if (service.getInetAddresses().length == 0) throw new IOException("Dosey was discovered, but no IP address was returned.");
-                String host = service.getInetAddresses()[0].getHostAddress();
-                int port = service.getPort();
-                String fingerprint = readAdvertisedFingerprint(host, port);
-                if (fingerprint.length() != 64 || !fingerprint.matches("[0-9a-f]{64}")) {
-                    throw new IOException("Android returned an invalid certificate fingerprint.");
+            List<String> interfaceNotes = new ArrayList<>();
+            ServiceInfo service = null;
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces != null && interfaces.hasMoreElements() && service == null) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                try {
+                    if (!networkInterface.isUp() || networkInterface.isLoopback()) continue;
+                    boolean hasIpv4 = networkInterface.inetAddresses().hasMoreElements();
+                    if (!hasIpv4) continue;
+                    for (Enumeration<InetAddress> addresses = networkInterface.getInetAddresses(); addresses.hasMoreElements();) {
+                        InetAddress address = addresses.nextElement();
+                        if (address.isLoopbackAddress() || address.isLinkLocalAddress()) continue;
+                        try (JmDNS dns = JmDNS.create(address)) {
+                            ServiceInfo[] services = dns.list("_dosey._tcp.local.", 3000);
+                            if (services.length > 0) {
+                                service = services[0];
+                                interfaceNotes.add(networkInterface.getDisplayName());
+                                break;
+                            }
+                        } catch (Exception interfaceError) {
+                            interfaceNotes.add(networkInterface.getDisplayName() + ": " + safeMessage(interfaceError));
+                        }
+                    }
+                } catch (Exception interfaceError) {
+                    interfaceNotes.add(networkInterface.getDisplayName() + ": " + safeMessage(interfaceError));
                 }
-                SwingUtilities.invokeLater(() -> {
-                    hostField.setText(host);
-                    portField.setText(Integer.toString(port));
-                    fingerprintField.setText(fingerprint);
-                    setBusy(false, "Dosey found · verifying certificate pin…");
-                    connect();
-                });
+            }
+            if (service == null) {
+                String details = interfaceNotes.isEmpty() ? "" : "\\nInterfaces checked: " + String.join("; ", interfaceNotes);
+                throw new IOException("No Dosey Companion found via mDNS. Confirm the phone's Companion server is running and the Wi-Fi allows devices to see each other. Windows VPNs, virtual adapters, or router client isolation can prevent discovery." + details);
+            }
+            if (service.getInetAddresses().length == 0) throw new IOException("Dosey was discovered, but no IP address was returned.");
+            String host = service.getInetAddresses()[0].getHostAddress();
+            int port = service.getPort();
+            String fingerprint = readAdvertisedFingerprint(host, port);
+            if (fingerprint.length() != 64 || !fingerprint.matches("[0-9a-f]{64}")) {
+                throw new IOException("Android returned an invalid certificate fingerprint.");
+            }
+            SwingUtilities.invokeLater(() -> {
+                hostField.setText(host);
+                portField.setText(Integer.toString(port));
+                fingerprintField.setText(fingerprint);
+                setBusy(false, "Dosey found · verifying certificate pin…");
+                connect();
+            });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     setBusy(false, null);
