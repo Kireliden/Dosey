@@ -253,7 +253,8 @@ public final class DoseyCompanionApp {
                 PinnedHttpClient.Response response = current.send(url + "/v1/pair/request", "POST", request.toString(), null);
                 JSONObject body = new JSONObject(response.body());
                 if (response.statusCode() != 200) throw new IOException("Pair request failed: " + body.optString("error", response.statusCode() + ""));
-                requestId = body.getString("requestId");
+                String id = body.getString("requestId");
+                requestId = id;
                 String code = body.getString("verificationCode");
                 pairingCodeFromLastPrompt = code;
                 SwingUtilities.invokeLater(() -> {
