@@ -17,10 +17,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Encrypted persistent storage foundation for per-PC Companion credentials.
+ * Encrypted persistent storage for per-PC Companion credentials.
  *
- * Deliberately not connected to the network server yet: credentials must not be issued until
- * the desktop performs certificate pinning and the end-to-end pairing flow is implemented.
  * Only one-way token verifiers are persisted; a raw credential is returned once by [issue].
  */
 internal object CompanionCredentialStore {
