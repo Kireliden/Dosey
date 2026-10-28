@@ -63,6 +63,11 @@ import com.borealis.dosey.ui.MedicationViewModel
 import com.borealis.dosey.ui.theme.DoseyTheme
 import android.Manifest
 import android.content.Intent
+import android.app.Activity
+import android.widget.Toast
+import org.json.JSONObject
+import com.google.zxing.client.android.Intents
+import com.google.zxing.integration.android.IntentIntegrator
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -117,6 +122,35 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
     var companionClients by remember { mutableStateOf(emptyList<CompanionCredentialStore.Client>()) }
     val pendingPairingRequest by CompanionPairingManager.pendingRequest.collectAsStateWithLifecycle()
     val companionFingerprint by CompanionNetworkServer.certificateFingerprint.collectAsStateWithLifecycle()
+    val qrScanner = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val rawQr = result.data?.getStringExtra(Intents.Scan.RESULT)
+            runCatching {
+                val payload = JSONObject(rawQr ?: error("No QR data"))
+                val request = pendingPairingRequest ?: error("There is no pending pairing request")
+                val localFingerprint = companionFingerprint.orEmpty()
+                    .replace(":", "").replace("-", "").filterNot { it.isWhitespace() }.lowercase(Locale.ROOT)
+                val qrFingerprint = payload.optString("fingerprint").replace(":", "").replace("-", "")
+                    .filterNot { it.isWhitespace() }.lowercase(Locale.ROOT)
+                require(payload.optString("type") == "dosey-companion-pairing" &&
+                    payload.optInt("protocolVersion") == 1) { "This QR code is not a Dosey pairing code." }
+                require(localFingerprint.length == 64 && localFingerprint == qrFingerprint) {
+                    "The QR certificate fingerprint does not match this phone. Do not approve this connection."
+                }
+                require(payload.optString("requestId") == request.id &&
+                    payload.optString("verificationCode") == request.verificationCode &&
+                    payload.optString("clientName") == request.clientName) {
+                    "The QR code does not match the pending PC request. Start pairing again."
+                }
+                require(payload.optString("host").isNotBlank() &&
+                    payload.optInt("port") in 1..65535) { "The QR code has invalid connection details." }
+                check(CompanionPairingManager.approve(request.id)) { "The pairing request expired. Try again." }
+                Toast.makeText(context, "Dosey Companion pairing approved", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(context, it.message ?: "Could not verify QR code", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     LaunchedEffect(selectedScreen, companionEnabled) {
         if (selectedScreen == "companion" && companionEnabled) {
             companionClients = runCatching { CompanionCredentialStore.list(context) }.getOrDefault(emptyList())
@@ -308,6 +342,23 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(stringResource(R.string.companion_pair_request_code_help))
+                                    Button(
+                                        onClick = {
+                                            val activity = context as? Activity
+                                            if (activity == null) {
+                                                Toast.makeText(context, "Unable to open QR scanner", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                val scanIntent = IntentIntegrator(activity).apply {
+                                                    setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                                                    setPrompt("Scan the QR code shown by Dosey Companion on your PC")
+                                                    setBeepEnabled(false)
+                                                    setOrientationLocked(false)
+                                                }.createScanIntent()
+                                                qrScanner.launch(scanIntent)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("Scan PC pairing QR") }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
