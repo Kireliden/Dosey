@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class DoseyDatabase : RoomDatabase() {
@@ -48,6 +48,13 @@ abstract class DoseyDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_dose_logs_medicationId_scheduledDate_minutesAfterMidnight ON dose_logs(medicationId, scheduledDate, minutesAfterMidnight)")
             }
         }
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medications ADD COLUMN stockQuantity INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE medications ADD COLUMN lowStockThreshold INTEGER NOT NULL DEFAULT 5")
+                db.execSQL("ALTER TABLE medications ADD COLUMN unitsPerDose INTEGER NOT NULL DEFAULT 1")
+            }
+        }
 
         @Volatile
         private var instance: DoseyDatabase? = null
@@ -58,7 +65,7 @@ abstract class DoseyDatabase : RoomDatabase() {
                     context.applicationContext,
                     DoseyDatabase::class.java,
                     "dosey.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }
