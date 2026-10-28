@@ -521,7 +521,7 @@ internal class CompanionNetworkServer(
             val now = System.currentTimeMillis()
             val spec = KeyGenParameterSpec.Builder(
                 KEY_ALIAS,
-                KeyProperties.PURPOSE_SIGN
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_DECRYPT
             )
                 .setKeySize(2048)
                 .setDigests(
@@ -530,6 +530,9 @@ internal class CompanionNetworkServer(
                     KeyProperties.DIGEST_SHA512
                 )
                 .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                // Conscrypt's Android Keystore fallback performs raw RSA operations through
+                // RSA/ECB/NoPadding; allow that operation for TLS certificate signatures.
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setCertificateSubject(X500Principal("CN=Dosey Companion"))
                 .setCertificateSerialNumber(
                     BigInteger.valueOf(SecureRandom().nextLong().ushr(1).coerceAtLeast(1L))
@@ -566,7 +569,8 @@ internal class CompanionNetworkServer(
 
         private const val SERVICE_TYPE = "_dosey._tcp."
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "dosey_companion_tls"
+        // Versioned alias ensures devices replace keys generated with the old incompatible policy.
+        private const val KEY_ALIAS = "dosey_companion_tls_v2"
         private const val CERT_VALIDITY_MS = 10L * 365 * 24 * 60 * 60 * 1000
         private const val MAX_REQUEST_LINE_BYTES = 2048
         private const val MAX_HEADER_LINE_BYTES = 2048
