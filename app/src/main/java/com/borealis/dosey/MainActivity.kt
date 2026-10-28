@@ -277,13 +277,6 @@ private fun DoseyHome(viewModel: MedicationViewModel) {
                                     }
                                 }
                             }
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                modifier = Modifier.height(0.dp),
-                                enabled = false,
-                                label = { Text("") }
-                            )
                             TextButton(
                                 onClick = { showOneOffDialog = true },
                                 modifier = Modifier.fillMaxWidth()
