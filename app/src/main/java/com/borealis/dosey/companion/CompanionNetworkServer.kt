@@ -10,7 +10,11 @@ import java.math.BigInteger
 import java.net.Socket
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.Date
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
@@ -251,6 +255,7 @@ internal class CompanionNetworkServer(
                         .put("protocolVersion", 1)
                         .put("status", if (CompanionPairingManager.pendingRequest.value == null) "pairing_required" else "pairing_pending")
                         .put("medicationDataAvailable", false)
+                        .put("certificateSha256", certificateFingerprint.value.orEmpty())
                         .put("serverTime", System.currentTimeMillis())
                         .toString()
                     pairStatusRequest -> JSONObject()
@@ -328,6 +333,13 @@ internal class CompanionNetworkServer(
             generator.initialize(spec)
             generator.generateKeyPair()
         }
+        val certificate = keyStore.getCertificate(KEY_ALIAS)
+            ?: throw IllegalStateException("Companion TLS certificate is missing")
+        val fingerprint = MessageDigest.getInstance("SHA-256")
+            .digest(certificate.encoded)
+            .joinToString(":") { byte -> "%02X".format(byte.toInt() and 0xFF) }
+        mutableCertificateFingerprint.value = fingerprint
+
         val keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
         keyManagerFactory.init(keyStore, null)
         return SSLContext.getInstance("TLS").apply {
@@ -341,6 +353,9 @@ internal class CompanionNetworkServer(
     }
 
     companion object {
+        private val mutableCertificateFingerprint = MutableStateFlow<String?>(null)
+        val certificateFingerprint: StateFlow<String?> = mutableCertificateFingerprint.asStateFlow()
+
         private const val SERVICE_TYPE = "_dosey._tcp."
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "dosey_companion_tls"
