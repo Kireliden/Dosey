@@ -8,7 +8,7 @@ import java.util.UUID
 
 /**
  * In-memory pairing approval state. Requests expire quickly and are discarded when the
- * service process stops. Credentials and data routes are intentionally not issued here yet.
+ * service process stops. An approved request may exchange its code once for a persistent credential.
  */
 internal object CompanionPairingManager {
     data class Request(
