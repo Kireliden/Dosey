@@ -12,6 +12,9 @@ interface DoseScheduleDao {
     @Query("SELECT * FROM dose_schedules ORDER BY minutesAfterMidnight ASC")
     fun observeAll(): Flow<List<DoseScheduleEntity>>
 
+    @Query("SELECT * FROM dose_schedules ORDER BY medicationId ASC, minutesAfterMidnight ASC")
+    suspend fun getAllForSnapshot(): List<DoseScheduleEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(schedule: DoseScheduleEntity): Long
 
