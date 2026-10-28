@@ -273,9 +273,14 @@ internal class CompanionNetworkServer(
                     confirmCode.matches(Regex("[0-9]{6}"))
                 val confirmedPairing = if (confirmInputValid)
                     CompanionPairingManager.confirmApproved(confirmId, confirmCode) else null
-                val issuedCredential = if (confirmedPairing != null) try {
-                    CompanionCredentialStore.issue(context, confirmedPairing.clientName)
-                } catch (_: Exception) { null } else null
+                val issuedCredential = if (confirmedPairing != null) {
+                    try {
+                        CompanionCredentialStore.issue(context, confirmedPairing.clientName)
+                    } catch (_: Exception) {
+                        CompanionPairingManager.restoreApprovedAfterIssueFailure(confirmedPairing)
+                        null
+                    }
+                } else null
                 val candidateToken = authorizationHeader?.takeIf { it.startsWith("Bearer ") }
                     ?.removePrefix("Bearer ")
                 val authenticatedToken = candidateToken?.takeIf {
