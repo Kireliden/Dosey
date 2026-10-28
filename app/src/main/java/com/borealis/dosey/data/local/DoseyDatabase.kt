@@ -8,14 +8,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class],
-    version = 4,
+    entities = [MedicationEntity::class, DoseScheduleEntity::class, DoseLogEntity::class, OneOffDoseEntity::class],
+    version = 5,
     exportSchema = false
 )
 abstract class DoseyDatabase : RoomDatabase() {
     abstract fun medicationDao(): MedicationDao
     abstract fun doseScheduleDao(): DoseScheduleDao
     abstract fun doseLogDao(): DoseLogDao
+    abstract fun oneOffDoseDao(): OneOffDoseDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -56,6 +57,21 @@ abstract class DoseyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(\"\"\"
+                    CREATE TABLE IF NOT EXISTS one_off_dose_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        medicationName TEXT NOT NULL,
+                        doseDescription TEXT NOT NULL,
+                        scheduledDate TEXT NOT NULL,
+                        minutesAfterMidnight INTEGER NOT NULL,
+                        recordedAt INTEGER NOT NULL
+                    )
+                \"\"\".trimIndent())
+            }
+        }
+
         @Volatile
         private var instance: DoseyDatabase? = null
 
@@ -65,7 +81,7 @@ abstract class DoseyDatabase : RoomDatabase() {
                     context.applicationContext,
                     DoseyDatabase::class.java,
                     "dosey.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
             }
     }
 }
