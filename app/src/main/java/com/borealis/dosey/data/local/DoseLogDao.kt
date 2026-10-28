@@ -11,6 +11,9 @@ interface DoseLogDao {
     @Query("SELECT * FROM dose_logs ORDER BY scheduledDate DESC, minutesAfterMidnight DESC")
     fun observeAll(): Flow<List<DoseLogEntity>>
 
+    @Query("SELECT * FROM dose_logs ORDER BY scheduledDate DESC, minutesAfterMidnight DESC")
+    suspend fun getAllForSnapshot(): List<DoseLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(log: DoseLogEntity)
 
