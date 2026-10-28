@@ -5,6 +5,8 @@ import org.json.JSONObject;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.qrcode.QRCodeWriter;
+import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceInfo;
 
 import javax.net.ssl.*;
 import javax.swing.*;
@@ -31,6 +33,7 @@ public final class DoseyCompanionApp {
     private final JTextField portField = new JTextField("443", 6);
     private final JTextField fingerprintField = new JTextField(48);
     private final JTextField clientNameField = new JTextField(System.getProperty("user.name", "My PC"), 20);
+    private final JButton discoverButton = new JButton("Find Dosey on network");
     private final JButton connectButton = new JButton("Verify certificate & connect");
     private final JButton pairButton = new JButton("Request pairing");
     private final JButton snapshotButton = new JButton("Refresh snapshot");
@@ -77,7 +80,9 @@ public final class DoseyCompanionApp {
         c.gridx = 1; c.gridwidth = 3; c.weightx = 1; connection.add(fingerprintField, c);
         c.gridx = 0; c.gridy = 2; c.gridwidth = 1; c.weightx = 0; connection.add(label("Computer name"), c);
         c.gridx = 1; c.gridwidth = 3; c.weightx = 1; connection.add(clientNameField, c);
+        c.gridx = 0; c.gridy = 3; c.gridwidth = 4; c.weightx = 1; connection.add(discoverButton, c);
 
+        discoverButton.addActionListener(e -> discoverDosey());
         connectButton.addActionListener(e -> connect());
         pairButton.addActionListener(e -> requestPairing());
         snapshotButton.addActionListener(e -> refreshSnapshot());
@@ -120,6 +125,68 @@ public final class DoseyCompanionApp {
         JLabel label = new JLabel(value);
         label.setForeground(new Color(198, 208, 245));
         return label;
+    }
+
+    /**
+     * Discovery reads only the unauthenticated status endpoint to learn the advertised certificate pin.
+     * No medication data or credentials are sent before the QR is checked on the Android device.
+     * The subsequent connection uses strict certificate pinning.
+     */
+    private void discoverDosey() {
+        setBusy(true, "Searching the local network for Dosey…");
+        CompletableFuture.runAsync(() -> {
+            try (JmDNS dns = JmDNS.create()) {
+                ServiceInfo[] services = dns.list("_dosey._tcp.local.", 4500);
+                if (services.length == 0) throw new IOException("No Dosey Companion found. Enable Companion on Android and check both devices are on the same Wi-Fi.");
+                ServiceInfo service = services[0];
+                if (service.getInetAddresses().length == 0) throw new IOException("Dosey was discovered, but no IP address was returned.");
+                String host = service.getInetAddresses()[0].getHostAddress();
+                int port = service.getPort();
+                String fingerprint = readAdvertisedFingerprint(host, port);
+                if (fingerprint.length() != 64 || !fingerprint.matches("[0-9a-f]{64}")) {
+                    throw new IOException("Android returned an invalid certificate fingerprint.");
+                }
+                SwingUtilities.invokeLater(() -> {
+                    hostField.setText(host);
+                    portField.setText(Integer.toString(port));
+                    fingerprintField.setText(fingerprint);
+                    setBusy(false, "Dosey found · verifying certificate pin…");
+                    connect();
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    setBusy(false, null);
+                    showError("Discovery failed: " + safeMessage(ex));
+                });
+            }
+        });
+    }
+
+    private String readAdvertisedFingerprint(String host, int port) throws Exception {
+        X509TrustManager bootstrapTrust = new X509TrustManager() {
+            @Override public void checkClientTrusted(X509Certificate[] chain, String authType) { }
+            @Override public void checkServerTrusted(X509Certificate[] chain, String authType) { }
+            @Override public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        };
+        SSLContext bootstrapContext = SSLContext.getInstance("TLS");
+        bootstrapContext.init(null, new TrustManager[]{bootstrapTrust}, null);
+        String address = host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host;
+        HttpsURLConnection connection = (HttpsURLConnection) new URL("https://" + address + ":" + port + "/v1/status").openConnection();
+        connection.setSSLSocketFactory(bootstrapContext.getSocketFactory());
+        connection.setHostnameVerifier((hostname, session) -> true);
+        connection.setInstanceFollowRedirects(false);
+        connection.setConnectTimeout(3500);
+        connection.setReadTimeout(3500);
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("Accept", "application/json");
+        try {
+            if (connection.getResponseCode() != 200) throw new IOException("Dosey status endpoint returned HTTP " + connection.getResponseCode());
+            JSONObject status = new JSONObject(new String(connection.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+            if (status.optInt("protocolVersion", -1) != 1) throw new IOException("Unsupported Dosey Companion protocol.");
+            return normaliseFingerprint(status.optString("certificateSha256", ""));
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private void connect() {
