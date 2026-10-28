@@ -151,6 +151,7 @@ internal class CompanionNetworkServer(
                 var headerCount = 0
                 var headersValid = true
                 var hostHeaderSeen = false
+                var hostHeaderDuplicate = false
                 var requestBodyDeclared = false
                 while (headersValid) {
                     val line = readAsciiLine(input, MAX_HEADER_LINE_BYTES)
@@ -170,14 +171,21 @@ internal class CompanionNetworkServer(
                         headersValid = false
                         break
                     }
-                    val name = line.substring(0, separator).trim().lowercase(java.util.Locale.ROOT)
+                    val rawName = line.substring(0, separator)
+                    val name = rawName.lowercase(java.util.Locale.ROOT)
                     val value = line.substring(separator + 1).trim()
-                    if (name.isEmpty() || name.any { !it.isLetterOrDigit() && it != '-' }) {
+                    if (name.isEmpty() || rawName.any { it !in 'A'..'Z' && it !in 'a'..'z' && it !in '0'..'9' && it != '-' }) {
                         headersValid = false
                         break
                     }
                     when (name) {
-                        "host" -> hostHeaderSeen = value.isNotEmpty()
+                        "host" -> {
+                            if (hostHeaderSeen || hostHeaderDuplicate) {
+                                hostHeaderDuplicate = true
+                            } else {
+                                hostHeaderSeen = value.isNotEmpty()
+                            }
+                        }
                         "content-length" -> {
                             val length = value.toLongOrNull()
                             if (length == null || length != 0L) requestBodyDeclared = true
@@ -187,9 +195,12 @@ internal class CompanionNetworkServer(
                 }
                 val parts = requestLine.split(" ")
                 val requestLineValid = parts.size == 3 &&
-                    parts[0].isNotBlank() && parts[1].startsWith("/") &&
+                    parts.none { it.isEmpty() } &&
+                    parts[0].all { it in 'A'..'Z' || it in 'a'..'z' } &&
+                    parts[1].startsWith("/") &&
+                    parts[1].none { it <= ' ' || it == '\\u007f' } &&
                     (parts[2] == "HTTP/1.1" || parts[2] == "HTTP/1.0")
-                val headersSafe = headersValid && !requestBodyDeclared &&
+                val headersSafe = headersValid && !requestBodyDeclared && !hostHeaderDuplicate &&
                     (parts.size != 3 || parts[2] != "HTTP/1.1" || hostHeaderSeen)
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
