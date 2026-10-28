@@ -63,5 +63,6 @@ The desktop client is intentionally out of scope for the Android-only foundation
 
 ### Snapshot preparation foundation
 
-- Added suspend DAO queries and an internal exporter that captures medications, schedules, scheduled-dose logs, and one-off logs within a single Room transaction. Its JSON representation includes protocol version and generation timestamp.
-- This is not an HTTP endpoint and cannot be called by a LAN client. Authenticated identity and certificate-pinned pairing must be in place before exposing any snapshot. A durable monotonic revision is still needed before implementing incremental sync or stale-snapshot detection.
+- Added suspend DAO queries and an internal exporter that captures medications, schedules, scheduled-dose logs, one-off logs, and the durable snapshot revision within one Room transaction. JSON includes protocol version, generation timestamp, and revision.
+- Database migration v5→v6 adds revision metadata and SQLite triggers for insert/update/delete on every exported table. This captures writes regardless of whether they originate in the repository, notification receiver, or future Companion commands.
+- This is not an HTTP endpoint and cannot be called by a LAN client. Certificate-pinned pairing, authenticated identity, and end-to-end tests are still required before exposing any snapshot.
