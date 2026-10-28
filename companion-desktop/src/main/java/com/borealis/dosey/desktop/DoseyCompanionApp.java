@@ -147,10 +147,9 @@ public final class DoseyCompanionApp {
                 client = newClient;
                 baseUrl = url;
                 SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText("Certificate verified · " + status.optString("status", "connected"));
+                    setBusy(false, "Certificate verified · " + status.optString("status", "connected"));
                     pairButton.setEnabled(true);
                     snapshotButton.setEnabled(credential != null);
-                    setBusy(false, null);
                     append("TLS certificate pin matched. Protocol v" + status.optInt("protocolVersion")
                         + " · server time " + status.optLong("serverTime") + "\n");
                 });
@@ -168,7 +167,7 @@ public final class DoseyCompanionApp {
     }
 
     private void requestPairing() {
-        PinnedHttpClient current = client;
+        PinnedPinnedHttpClient current = client;
         String url = baseUrl;
         if (current == null || url == null) return;
         String name = clientNameField.getText().trim();
@@ -209,7 +208,7 @@ public final class DoseyCompanionApp {
         setBusy(true, "Waiting for Android approval…");
         CompletableFuture.runAsync(() -> {
             try {
-                long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(120);
                 while (System.nanoTime() < deadline) {
                     PinnedHttpClient.Response response = current.send(url + "/v1/pair/status?id=" + id, "GET", null, null);
                     JSONObject body = new JSONObject(response.body());
