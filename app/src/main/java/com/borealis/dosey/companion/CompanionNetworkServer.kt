@@ -220,6 +220,14 @@ internal class CompanionNetworkServer(
                         ))
                 val isStatusRequest = headersSafe && requestLineValid &&
                     parts[0] == "GET" && parts[1] == "/v1/status" && parts[2] == "HTTP/1.1"
+                val pairStatusRequest = headersSafe && requestLineValid &&
+                    parts[0] == "GET" && parts[1].startsWith("/v1/pair/status?id=") &&
+                    parts[2] == "HTTP/1.1"
+                val pairStatusId = if (pairStatusRequest) {
+                    parts[1].substringAfter("/v1/pair/status?id=").takeIf {
+                        it.matches(Regex("[a-fA-F0-9-]{36}"))
+                    }
+                } else null
                 val pairRequestBody = if (headersSafe && isPairRequest) {
                     val bytes = ByteArray(contentLength)
                     var offset = 0
@@ -245,6 +253,11 @@ internal class CompanionNetworkServer(
                         .put("medicationDataAvailable", false)
                         .put("serverTime", System.currentTimeMillis())
                         .toString()
+                    pairStatusRequest -> JSONObject()
+                        .put("requestId", pairStatusId ?: "")
+                        .put("status", pairStatusId?.let(CompanionPairingManager::status) ?: "not_found")
+                        .put("credentialsIssued", false)
+                        .toString()
                     pairRequestValid -> JSONObject()
                         .put("requestId", pairingRequest!!.id)
                         .put("verificationCode", pairingRequest.verificationCode)
@@ -256,7 +269,7 @@ internal class CompanionNetworkServer(
                 }
                 val status = when {
                     !headersSafe || !requestLineValid -> "400 Bad Request"
-                    isStatusRequest || pairRequestValid -> "200 OK"
+                    isStatusRequest || pairStatusRequest || pairRequestValid -> "200 OK"
                     isPairRequest -> "409 Conflict"
                     else -> "404 Not Found"
                 }
