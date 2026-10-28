@@ -124,6 +124,18 @@ internal object CompanionPairingManager {
         return request
     }
 
+    /**
+     * Restore an approved request if credential persistence fails after the code was verified.
+     * This lets the PC retry confirmation without asking the user to approve a new request.
+     */
+    @Synchronized
+    fun restoreApprovedAfterIssueFailure(request: Request) {
+        if (completedRequestId != request.id || completedStatus != "completed") return
+        completedRequest = request
+        completedStatus = "approved"
+        completedAt = System.currentTimeMillis()
+    }
+
     @Synchronized
     fun clearExpired() {
         val request = mutablePendingRequest.value
