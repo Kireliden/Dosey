@@ -201,7 +201,7 @@ public final class DoseyCompanionApp {
     }
 
     private void pollPairing() {
-        HttpClient current = client;
+        PinnedHttpClient current = client;
         String url = baseUrl;
         String id = requestId;
         if (current == null || url == null || id == null) return;
@@ -242,7 +242,7 @@ public final class DoseyCompanionApp {
     private volatile String pairingCodeFromLastPrompt = "";
 
     private void refreshSnapshot() {
-        HttpClient current = client;
+        PinnedHttpClient current = client;
         String url = baseUrl;
         String token = credential;
         if (current == null || url == null || token == null) return;
